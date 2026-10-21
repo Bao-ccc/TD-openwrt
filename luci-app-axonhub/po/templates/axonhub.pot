@@ -1,0 +1,254 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8"
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:275
+msgid "%s (%s total, %s free, %s)"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:258
+msgid ""
+"A free port is selected randomly on first installation. The saved value "
+"remains unchanged after restarts."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:289
+msgid ""
+"A soft runtime limit that leaves memory available for routing and other "
+"services."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:252
+msgid "Advanced"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:339
+msgid "Automatic request history cleanup"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:239
+#: luci-app-axonhub/root/usr/share/luci/menu.d/luci-app-axonhub.json:14
+msgid "AxonHub"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:120
+msgid "AxonHub Log"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:148
+msgid "CPU %s"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:298
+msgid "CPU threads"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:265
+msgid ""
+"Changing this path starts a separate instance unless the existing database "
+"is moved while AxonHub is stopped."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:340
+msgid ""
+"Clean up expired requests, usage records and stored payloads according to "
+"the retention policy in AxonHub. Daily cleanup runs at 02:00 UTC; hourly "
+"cleanup runs on the hour."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:330
+msgid ""
+"Clear the dedicated AxonHub log at 03:00 on the selected calendar schedule. "
+"System log entries are never cleared."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:127
+msgid "Close"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:216
+msgid "Collecting data..."
+msgstr ""
+
+#: luci-app-axonhub/root/usr/share/luci/menu.d/luci-app-axonhub.json:3
+msgid "Control"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:264
+msgid "Database and settings directory"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:317
+msgid "Debug"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:331
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:341
+msgid "Disabled"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:325
+msgid "Disabled by default because AxonHub can produce a large volume of logs."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:254
+msgid "Enable"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:182
+msgid "Enable the service and save the configuration to start it."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:320
+msgid "Error"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:332
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:342
+msgid "Every day"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:343
+msgid "Every hour"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:334
+msgid "Every month"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:333
+msgid "Every week"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:356
+msgid "Failed to update the log cleanup schedule."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:250
+msgid "General"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:288
+msgid "Go memory limit"
+msgstr ""
+
+#: luci-app-axonhub/root/usr/share/rpcd/acl.d/luci-app-axonhub.json:3
+msgid "Grant access to luci-app-axonhub"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:318
+msgid "Info"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:241
+msgid "Installed version: %s"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:257
+msgid "Listen port"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:329
+msgid "Log cleanup schedule"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:316
+msgid "Log level"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:109
+msgid "Log reader exited with code %s."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:150
+msgid "MEM %s"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:306
+msgid "Maximum database connections"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:311
+msgid "Maximum idle database connections"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:240
+msgid "Native AxonHub service and management interface. — AI Edition"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:266
+msgid ""
+"New databases store request and response payloads in the payloads "
+"subdirectory. Existing AxonHub storage settings are preserved."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:111
+msgid "No AxonHub log entries were found."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:180
+msgid "Not running"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:159
+msgid "Open AxonHub"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:146
+msgid "PID %s"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:282
+msgid "Refresh"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:281
+msgid "Refresh storage locations"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:251
+msgid "Resources"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:161
+msgid "Restart"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:180
+msgid "Running"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:180
+msgid "Running (unmanaged)"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:247
+msgid "Service Settings"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:88
+msgid "Service action failed: %s."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:164
+msgid "Start"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:132
+msgid "Unable to read logs: %s."
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:174
+msgid "View Log"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:319
+msgid "Warning"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:324
+msgid "Write logs to system log"
+msgstr ""
+
+#: luci-app-axonhub/htdocs/luci-static/resources/view/axonhub.js:80
+msgid "exit code %s"
+msgstr ""

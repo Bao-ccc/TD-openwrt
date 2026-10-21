@@ -135,7 +135,48 @@ derive_version() {
   fi
 }
 
-# 模板替换：${REPO} ${TAG} ${VERSION} ${ASSET} 以及 $(PKG_VERSION)
+# 版本号比较：返回 0=相等  1=a>b  2=a<b
+# 点分段逐段数字比较，遇到非数字段则退化为字符串比较
+ver_cmp() {
+  local a="$1" b="$2"
+  if [[ "$a" == "$b" ]]; then return 0; fi
+
+  local IFS='.'
+  local -a pa=() pb=()
+  read -ra pa <<< "$a"
+  read -ra pb <<< "$b"
+
+  local max=${#pa[@]}
+  if (( ${#pb[@]} > max )); then max=${#pb[@]}; fi
+
+  local i x y
+  for ((i = 0; i < max; i++)); do
+    x="${pa[i]:-0}"
+    y="${pb[i]:-0}"
+    if [[ ! "$x" =~ ^[0-9]+$ || ! "$y" =~ ^[0-9]+$ ]]; then
+      if [[ "$a" == "$b" ]]; then return 0; fi
+      if [[ "$a" > "$b" ]]; then return 1; fi
+      return 2
+    fi
+    if (( 10#$x > 10#$y )); then return 1; fi
+    if (( 10#$x < 10#$y )); then return 2; fi
+  done
+  return 0
+}
+
+# 候选版本是否严格“更新”于基线
+#   is_newer <candidate> <baseline>   → 0=是  1=否
+is_newer() {
+  local cand="$1" base="$2"
+  if [[ -z "$cand" ]]; then return 1; fi
+  if [[ -z "$base" ]]; then return 0; fi   # 本地没有版本号，视为需要更新
+  local rc=0
+  ver_cmp "$cand" "$base" || rc=$?
+  if [[ "$rc" -eq 1 ]]; then return 0; fi
+  return 1
+}
+
+# 模板替换：${REPO} ${TAG} ${VERSION} ${RELEASE} ${ASSET} 以及 $(PKG_VERSION)
 expand_tpl() {
   local s="$1" repo="$2" tag="$3" version="$4" asset="$5" release="${6-}"
   s="${s//\$\{REPO\}/$repo}"
@@ -190,13 +231,22 @@ has_var_line() {
 }
 
 # 替换/追加一行 <var>:=<value>
+# 替换变量赋值行（只改第一处，避免误伤后续的 $(subst) 派生式）
+#   保留原有缩进，只换 = 右侧的值；不存在则追加一行
 replace_var_line() {
   local file="$1" var="$2" value="$3"
   local tmp
   tmp=$(mktemp)
   awk -v v="$var" -v nv="$value" '
-    # 保留原有缩进（只换 = 右侧的值）
-    { if (match($0, "^[ \t]*" v "[ \t]*[:?+]?=")) { print substr($0, 1, RLENGTH) nv; next } print }
+    BEGIN { done = 0 }
+    {
+      if (!done && match($0, "^[ \t]*" v "[ \t]*[:?+]?=")) {
+        print substr($0, 1, RLENGTH) nv
+        done = 1
+        next
+      }
+      print
+    }
   ' "$file" > "$tmp"
   if ! grep -qE "^[[:space:]]*${var}[[:space:]]*[:?+]?=" "$file"; then
     printf '%s:=%s\n' "$var" "$value" >> "$tmp"
@@ -208,6 +258,63 @@ replace_var_line() {
 read_var_line() {
   local file="$1" var="$2"
   sed -nE "s/^[[:space:]]*${var}[[:space:]]*[:?+]?=[[:space:]]*//p" "$file" | head -n1
+}
+
+# 读取“包含 anchor 的那一行”里 <var> 的值（如 GEOIP_VER、PKG_VERSION）
+read_anchor_var() {
+  local file="$1" anchor="$2" var="$3"
+  grep -F "$anchor" "$file" 2>/dev/null | head -n1 \
+    | sed -nE "s/.*${var}[[:space:]]*[:?+]?=[[:space:]]*//p"
+}
+
+# 是否为可比较的字面量版本号（排除 $(...) / ${...} 这类 Makefile 派生式）
+is_literal_ver() {
+  local v="$1"
+  [[ -n "$v" ]] || return 1
+  [[ "$v" == *'$'* ]] && return 1
+  [[ "$v" == *'('* || "$v" == *')'* ]] && return 1
+  return 0
+}
+
+# 版本闸门：上游版本不高于本地则应忽略同步
+#   should_skip_sync <上游版本> <本地版本> <skip_if_not_newer>
+#   返回 0=应忽略  1=应同步
+should_skip_sync() {
+  local up="$1" loc="$2" gate="$3"
+  if [[ "$gate" != "true" ]]; then return 1; fi
+  is_literal_ver "$up"   || return 1   # 上游是派生式/空 → 无法比较，放行
+  is_literal_ver "$loc"  || return 1
+  if is_newer "$up" "$loc"; then return 1; fi
+  return 0
+}
+
+# 源码同步的版本闸门（多版本变量）
+#   比较两个 Makefile 里一组版本变量（如 PKG_VERSION / GEOIP_VER / GEOSITE_VER）：
+#     · 只要有一个上游值严格更新 → 同步
+#     · 所有可比变量都不更高 → 忽略
+#     · 一个可比的都没有 → 同步（无法判定时保守放行）
+#   should_skip_source <上游Makefile> <本地Makefile> <gate> <变量列表,换行分隔>
+#   返回 0=应忽略  1=应同步
+should_skip_source() {
+  local upfile="$1" locfile="$2" gate="$3" vars="$4"
+  if [[ "$gate" != "true" ]]; then return 1; fi
+  if [[ ! -f "$upfile" || ! -f "$locfile" ]]; then return 1; fi
+
+  local compared=0 newer=0 v uv lv
+  while IFS= read -r v; do
+    [[ -z "$v" ]] && continue
+    uv=$(read_var_line "$upfile" "$v")
+    lv=$(read_var_line "$locfile" "$v")
+    # 只比较字面量版本号，跳过 $(...) / ${...} 派生式
+    is_literal_ver "$uv" || continue
+    is_literal_ver "$lv" || continue
+    compared=$((compared + 1))
+    if is_newer "$uv" "$lv"; then newer=$((newer + 1)); fi
+  done <<< "$vars"
+
+  if [[ "$compared" -eq 0 ]]; then return 1; fi
+  if [[ "$newer" -gt 0 ]]; then return 1; fi
+  return 0
 }
 
 # 用字面量 anchor 定位块，替换其后第一条 <hash_var>:= 行
@@ -337,11 +444,33 @@ sync_source() {
   fi
 
   # ---------- 5. 落地 ----------
+  local gate ver_vars
+  gate=$(cfg_get "$cfg" ".sources[$idx].skip_if_not_newer" "true")
+  ver_vars=$(jq -r ".sources[$idx].version_vars // [\"PKG_VERSION\",\"PKG_UPSTREAM_VERSION\",\"GEOIP_VER\",\"GEOSITE_VER\"] | .[]" "$CONFIG_FILE" 2>/dev/null)
   local changed=0
   local copied=()
+  local ignored=()
   for it in "${items[@]}"; do
     [[ -e "$work/$it" ]] || { log "[警告] 上游没有 ${it}，跳过"; continue; }
     local dst="${target}/${it}"
+
+    # 版本闸门：上游插件的所有版本变量都不高于本地 → 忽略该插件的同步
+    if [[ "$FORCE" != "true" ]]; then
+      if should_skip_source "$work/$it/Makefile" "$dst/Makefile" "$gate" "$ver_vars"; then
+        local cmp_desc="" vv uu ll
+        while IFS= read -r vv; do
+          [[ -z "$vv" ]] && continue
+          uu=$(read_var_line "$work/$it/Makefile" "$vv")
+          ll=$(read_var_line "$dst/Makefile" "$vv")
+          [[ -z "$uu" && -z "$ll" ]] && continue
+          is_literal_ver "$uu" || continue
+          is_literal_ver "$ll" || continue
+          cmp_desc+="${cmp_desc:+ }${vv}=${uu:-?}/${ll:-?}"
+        done <<< "$ver_vars"
+        log "[源码] ${it} 上游版本不高于本地（${cmp_desc:-无可比变量}），忽略同步"
+        ignored+=("$it"); continue
+      fi
+    fi
 
     if [[ "$DRY_RUN" == "true" ]]; then
       log "[dry-run] 将同步 ${repo}/${it} → ${dst}"
@@ -366,8 +495,9 @@ sync_source() {
     --arg name "$name" --arg repo "$repo" --arg ref "$ref" \
     --arg sha "$sha" --arg target "$target" \
     --argjson copied "$(printf '%s\n' "${copied[@]:-}" | jq -R . | jq -s -c 'map(select(length>0))')" \
+    --argjson ignored "$(printf '%s\n' "${ignored[@]:-}" | jq -R . | jq -s -c 'map(select(length>0))')" \
     --arg updated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
-    '{name:$name, repo:$repo, ref:$ref, sha:$sha, target:$target, copied:$copied, updated_at:$updated_at}')
+    '{name:$name, repo:$repo, ref:$ref, sha:$sha, target:$target, copied:$copied, ignored:$ignored, updated_at:$updated_at}')
   write_state "$state_file" "$payload"
 
   if [[ "$changed" == "1" ]]; then
@@ -380,6 +510,7 @@ sync_source() {
 Commit: ${sha:-unknown}
 同步到: ${target}/
 条目: ${copied[*]:-}
+忽略: ${ignored[*]:-（无）}
 
 时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
 EOF
@@ -442,17 +573,32 @@ strategy_tarball() {
 
   [[ -n "$version" ]] || { log "[失败] 无法从 tag 「${tag}」推导版本号"; return 1; }
 
+  # 版本/哈希写入哪两个变量（默认 PKG_VERSION / PKG_HASH）
+  # 例：VIKINGYFY 的 sing-box 用 PKG_UPSTREAM_VERSION，PKG_VERSION 由 $(subst) 派生不能碰
+  local ver_var hash_var
+  ver_var=$(cfg_get "$cfg" ".packages[$idx].version_var" "PKG_VERSION")
+  hash_var=$(cfg_get "$cfg" ".packages[$idx].hash_var" "PKG_HASH")
+
   local cur_version cur_hash
-  cur_version=$(read_var_line "$makefile" "PKG_VERSION")
-  cur_hash=$(read_var_line "$makefile" "PKG_HASH")
+  cur_version=$(read_var_line "$makefile" "$ver_var")
+  cur_hash=$(read_var_line "$makefile" "$hash_var")
 
-  log "[tarball] ${name}: tag=${tag} → PKG_VERSION=${version}"
-  log "[tarball] 当前 Makefile: PKG_VERSION=${cur_version:-<空>}"
+  log "[tarball] ${name}: tag=${tag} → ${ver_var}=${version}"
+  log "[tarball] 当前 Makefile: ${ver_var}=${cur_version:-<空>}"
 
-  if [[ "$FORCE" != "true" && "$cur_version" == "$version" && -n "$cur_hash" ]]; then
-    log "[tarball] ${name} 已是最新，跳过"
-    LAST_ACTION="skipped"
-    return 0
+  if [[ "$FORCE" != "true" ]]; then
+    # 版本闸门：上游版本不高于本地 → 忽略同步（不降级、不重复拉取）
+    if should_skip_sync "$version" "$cur_version" "$(cfg_get "$cfg" ".packages[$idx].skip_if_not_newer" "true")"; then
+      log "[tarball] ${name} 上游版本 ${version} 不高于本地 ${cur_version}，忽略同步"
+      LAST_ACTION="skipped"
+      return 0
+    fi
+    # 同版本但本地缺哈希，仍需补算
+    if [[ "$cur_version" == "$version" && -n "$cur_hash" ]]; then
+      log "[tarball] ${name} 已是最新，跳过"
+      LAST_ACTION="skipped"
+      return 0
+    fi
   fi
 
   [[ -n "$src_tpl" ]] || src_tpl='https://codeload.github.com/${REPO}/tar.gz/${TAG}'
@@ -466,16 +612,16 @@ strategy_tarball() {
     return 1
   fi
   sha="${hs%%$'\t'*}"; size="${hs#*$'\t'}"
-  log "[tarball] PKG_HASH=${sha}  ($(human_size "$size"))"
+  log "[tarball] ${hash_var}=${sha}  ($(human_size "$size"))"
 
   if [[ "$DRY_RUN" == "true" ]]; then
-    log "[dry-run] ${makefile} → PKG_VERSION=${version}, PKG_HASH=${sha}"
+    log "[dry-run] ${makefile} → ${ver_var}=${version}, ${hash_var}=${sha}"
     LAST_ACTION="updated"
     return 0
   fi
 
-  replace_var_line "$makefile" "PKG_VERSION" "$version"
-  replace_var_line "$makefile" "PKG_HASH" "$sha"
+  replace_var_line "$makefile" "$ver_var" "$version"
+  replace_var_line "$makefile" "$hash_var" "$sha"
   if [[ -n "$release" ]]; then
     replace_var_line "$makefile" "PKG_RELEASE" "$release"
   elif [[ "$reset_release" == "true" ]] && has_var_line "$makefile" "PKG_RELEASE"; then
@@ -492,7 +638,7 @@ strategy_tarball() {
   notify "🚀 新 Release: ${repo} ${tag}" "$(cat <<EOF
 包名: ${name}
 仓库: ${repo}
-版本: ${tag}  →  PKG_VERSION:=${version}
+版本: ${tag}  →  ${ver_var}:=${version}
 大小: $(human_size "$size")
 时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
 
@@ -536,6 +682,20 @@ strategy_assets() {
     log "[assets] ${name}: 上游 ${vrepo} tag=${vtag} → 版本=${pkg_ver}${pkg_rel:+ (PKG_RELEASE=${pkg_rel})}"
   fi
 
+  # ---------- 包级版本闸门 ----------
+  local ver_var2
+  ver_var2=$(cfg_get "$cfg" ".packages[$idx].version_var" "PKG_VERSION")
+  if [[ "$FORCE" != "true" && -n "$pkg_ver" ]]; then
+    local gate pkg_cur
+    gate=$(cfg_get "$cfg" ".packages[$idx].skip_if_not_newer" "true")
+    pkg_cur=$(read_var_line "$makefile" "$ver_var2")
+    if should_skip_sync "$pkg_ver" "$pkg_cur" "$gate"; then
+      log "[assets] ${name} 上游版本 ${pkg_ver} 不高于本地 ${pkg_cur}，忽略同步"
+      LAST_ACTION="skipped"
+      return 0
+    fi
+  fi
+
   local changed=0
   local summary=()
 
@@ -555,6 +715,8 @@ strategy_assets() {
     url_tpl=$(cfg_get "$cfg" "$p.url")
     hash_var=$(cfg_get "$cfg" "$p.hash_var" "PKG_HASH")
     aasset=$(cfg_get "$cfg" "$p.asset" "$aid")
+    ver_anchor=$(cfg_get "$cfg" "$p.ver_anchor")
+    ver_line=$(cfg_get "$cfg" "$p.ver_line")
 
     # 资源可自带版本来源
     local a_ver="$pkg_ver" a_tag="$vtag" a_rel="$pkg_rel"
@@ -579,6 +741,16 @@ strategy_assets() {
     [[ -n "$anchor" && -n "$url_tpl" ]] || { log "[警告] ${name}/${aid} 缺少 anchor / url"; continue; }
     [[ -n "$a_ver" ]] || { log "[警告] ${name}/${aid} 无法确定版本号"; continue; }
 
+    # ---------- 单资源版本闸门（针对 GEOIP_VER 这类独立版本变量）----------
+    if [[ "$FORCE" != "true" && -n "$ver_anchor" ]]; then
+      local a_cur
+      a_cur=$(read_anchor_var "$makefile" "$ver_anchor" "${ver_anchor%%:*}")
+      if should_skip_sync "$a_ver" "$a_cur" "$(cfg_get "$cfg" ".packages[$idx].skip_if_not_newer" "true")"; then
+        log "[assets] ${name}/${aid} 上游版本 ${a_ver} 不高于本地 ${a_cur}，忽略该资源"
+        continue
+      fi
+    fi
+
     local url
     url=$(expand_tpl "$url_tpl" "${a_repo:-}" "$a_tag" "$a_ver" "$aasset" "$a_rel")
     log "[assets] ${name}/${aid}: 版本=${a_ver} 下载 ${url}"
@@ -601,8 +773,6 @@ strategy_assets() {
     fi
 
     # 版本变量（如 GEOIP_VER / PKG_VERSION）
-    ver_anchor=$(cfg_get "$cfg" "$p.ver_anchor")
-    ver_line=$(cfg_get "$cfg" "$p.ver_line")
     if [[ -n "$ver_anchor" && -n "$ver_line" ]]; then
       local expanded
       expanded=$(expand_tpl "$ver_line" "${a_repo:-}" "$a_tag" "$a_ver" "$aasset" "$a_rel")
@@ -617,15 +787,15 @@ strategy_assets() {
     if [[ "$old" != "$sha" ]]; then changed=1; fi
   done
 
-  # 包级 PKG_VERSION / PKG_RELEASE
+  # 包级版本变量 / PKG_RELEASE
   if [[ -n "$pkg_ver" ]]; then
     local cur
-    cur=$(read_var_line "$makefile" "PKG_VERSION")
+    cur=$(read_var_line "$makefile" "$ver_var2")
     if [[ "$cur" != "$pkg_ver" ]]; then changed=1; fi
     if [[ "$DRY_RUN" == "true" ]]; then
-      log "[dry-run] ${makefile} → PKG_VERSION:=${pkg_ver}"
+      log "[dry-run] ${makefile} → ${ver_var2}:=${pkg_ver}"
     else
-      replace_var_line "$makefile" "PKG_VERSION" "$pkg_ver"
+      replace_var_line "$makefile" "$ver_var2" "$pkg_ver"
     fi
 
     # 版本正则第 2 捕获组 = PKG_RELEASE
@@ -703,6 +873,14 @@ strategy_notify() {
   [[ -f "$makefile" ]] && cur=$(read_var_line "$makefile" "PKG_VERSION")
 
   log "[notify] ${name}: 上游 ${repo} tag=${tag} → 版本=${version}  (本地: ${cur:-<无>})"
+
+  # 版本闸门：上游版本不高于本地 → 忽略
+  if [[ "$FORCE" != "true" ]] \
+     && should_skip_sync "$version" "$cur" "$(cfg_get "$cfg" ".packages[$idx].skip_if_not_newer" "true")"; then
+    log "[notify] ${name} 上游版本 ${version} 不高于本地 ${cur}，忽略"
+    LAST_ACTION="skipped"
+    return 0
+  fi
 
   local state_file="${STATE_DIR}/pkg-${name}.json"
   local last

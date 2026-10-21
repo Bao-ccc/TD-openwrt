@@ -1,0 +1,21 @@
+{
+	"luci-app-axonhub": {
+		"description": "Grant access to luci-app-axonhub",
+		"read": {
+			"file": {
+				"/usr/libexec/axonhub-read-log": [ "exec" ]
+			},
+			"ubus": {
+				"luci.axonhub": [ "status", "info" ],
+				"service": [ "list" ]
+			},
+			"uci": [ "axonhub" ]
+		},
+		"write": {
+			"ubus": {
+				"luci.axonhub": [ "action", "cron" ]
+			},
+			"uci": [ "axonhub" ]
+		}
+	}
+}

@@ -148,6 +148,101 @@ echo "════ 7. expand_tpl 占位符 ════"
 s=$(expand_tpl 'u/${REPO}|${TAG}|${VERSION}|${RELEASE}|${ASSET}|$(PKG_VERSION)' 'o/r' 'v1' '1' 'a.bin' '2')
 [[ "$s" == 'u/o/r|v1|1|2|a.bin|1' ]] && ok "全部占位符展开正确" || bad "got=$s"
 
+echo "════ 8. 版本比较 ver_cmp / is_newer ════"
+tc() { local want="$1" a="$2" b="$3" got
+  ver_cmp "$a" "$b"; got=$?
+  [[ "$got" == "$want" ]] && ok "ver_cmp $a $b → $got" || bad "ver_cmp $a $b → $got（期望 $want）"; }
+tc 0 '1.0.0'  '1.0.0'
+tc 1 '1.0.1'  '1.0.0'
+tc 2 '1.0.0'  '1.0.1'
+tc 1 '26.10.21' '26.9.15'      # 月份 10 > 9（逐段数字比较）
+tc 2 '26.9.15'  '26.10.21'
+tc 1 '1.14.3'  '1.9.9'         # 14 > 9
+ntc() { local want="$1" a="$2" b="$3" got=1
+  is_newer "$a" "$b" && got=0
+  [[ "$got" == "$want" ]] && ok "is_newer $a $b → $got" || bad "is_newer $a $b → $got（期望 $want）"; }
+ntc 0 '2.0.0' '1.9.9'
+ntc 1 '1.9.9' '2.0.0'
+ntc 1 '2.0.0' '2.0.0'          # 相等不算更新
+ntc 0 '2.0.0' ''               # 本地无版本 → 需要更新
+ntc 1 ''      '2.0.0'          # 上游无版本 → 不更新
+
+echo "════ 9. 版本闸门 should_skip_sync ════"
+sc() { local want="$1" up="$2" loc="$3" gate="$4" got=1
+  should_skip_sync "$up" "$loc" "$gate" && got=0
+  [[ "$got" == "$want" ]] && ok "up=$up loc=$loc gate=$gate → skip=$got" || bad "→ skip=$got（期望 $want）"; }
+sc 0 '1.0.0' '2.0.0' true     # 上游旧 → 忽略
+sc 0 '2.0.0' '2.0.0' true     # 相等 → 忽略
+sc 1 '2.0.1' '2.0.0' true     # 上游新 → 同步
+sc 1 '1.0.0' '2.0.0' false    # 闸门关闭 → 同步
+sc 1 ''      '2.0.0' true     # 无版本信息 → 同步
+sc 1 '1.0.0' ''      true     # 本地无版本 → 同步
+
+echo "════ 10. 源码闸门（多版本变量） should_skip_source ════"
+mk() { printf 'PKG_VERSION:=%s\nGEOIP_VER:=%s\nGEOSITE_VER:=%s\n' "$1" "$2" "$3"; }
+VARS=$'PKG_VERSION\nGEOIP_VER\nGEOSITE_VER'
+sx() { local want="$1" desc="$2" got=1
+  should_skip_source "$T/up.mk" "$T/loc.mk" true "$VARS" && got=0
+  [[ "$got" == "$want" ]] && ok "$desc → skip=$got" || bad "$desc → skip=$got（期望 $want）"; }
+
+mk 1.0.0 202601010000 202601010000 > "$T/up.mk";  mk 2.0.0 202601010000 202601010000 > "$T/loc.mk"
+sx 0 'PKG_VERSION 上游旧 → 忽略'
+mk 3.0.0 202601010000 202601010000 > "$T/up.mk"
+sx 1 'PKG_VERSION 上游新 → 同步'
+mk 1.0.0 202602020000 202601010000 > "$T/up.mk";  mk 1.0.0 202601010000 202601010000 > "$T/loc.mk"
+sx 1 'GEOIP_VER 上游新 → 同步（即使 PKG_VERSION 相同）'
+mk 1.0.0 202501010000 202601010000 > "$T/up.mk"
+sx 0 'GEOIP_VER 上游旧且其余相同 → 忽略'
+mk 1.0.0 202501010000 202501010000 > "$T/up.mk";  mk 1.0.0 202601010000 202601010000 > "$T/loc.mk"
+sx 0 '全部变量上游都不更高 → 忽略'
+mk 1.0.0 202501010000 202602020000 > "$T/up.mk"
+sx 1 'GEOSITE_VER 上游新 → 同步'
+# 无任何可比变量（如无 PKG_VERSION 也无 *_VER）
+printf 'FOO:=1\n' > "$T/up.mk"; printf 'FOO:=2\n' > "$T/loc.mk"
+sx 1 '无可比版本变量 → 保守放行'
+# 闸门关闭
+mk 1.0.0 202501010000 202501010000 > "$T/up.mk";  mk 2.0.0 202601010000 202601010000 > "$T/loc.mk"
+got=1; should_skip_source "$T/up.mk" "$T/loc.mk" false "$VARS" && got=0
+[[ "$got" == 1 ]] && ok "skip_if_not_newer=false → 同步" || bad "→ skip=$got"
+# 真实文件：v2ray-geodata 上游 vs 抬高的本地
+sed 's/^GEOIP_VER:=.*/GEOIP_VER:=209901010000/' v2ray-geodata/Makefile > "$T/loc.mk"
+got=1; should_skip_source v2ray-geodata/Makefile "$T/loc.mk" true "$VARS" && got=0
+[[ "$got" == 0 ]] && ok "真实 v2ray-geodata：本地 GEOIP_VER 更高 → 忽略" || bad "→ skip=$got"
+
+echo "════ 11. 字面量判定 is_literal_ver（排除 Makefile 派生式） ════"
+lv() { local want="$1" v="$2" got=1; is_literal_ver "$v" && got=0
+  [[ "$got" == "$want" ]] && ok "is_literal_ver '$v' → $got" || bad "' $v' → $got（期望 $want）"; }
+lv 0 '1.2.3'
+lv 0 '1.15.0-alpha.12'
+lv 0 '2026.10.21'
+lv 1 '$(subst -alpha.,_alpha,$(PKG_UPSTREAM_VERSION))'
+lv 1 '$(PKG_UPSTREAM_VERSION)'
+lv 1 '${VERSION}'
+lv 1 ''
+# 派生式不应参与比较 → 放行同步
+got=1
+should_skip_sync '$(subst -alpha.,_alpha,$(PKG_UPSTREAM_VERSION))' '1.14.3' true && got=0
+[[ "$got" == 1 ]] && ok "上游是派生式 → 不闸、放行同步" || bad "→ skip=$got"
+got=1
+should_skip_source <(printf 'PKG_VERSION:=%s\n' '$(subst -a.,_a,$(PKG_UPSTREAM_VERSION))') \
+                   <(printf 'PKG_VERSION:=%s\n' '1.14.3') true $'PKG_VERSION' && got=0
+[[ "$got" == 1 ]] && ok "源码闸门：派生式不参与比较 → 放行" || bad "→ skip=$got"
+
+echo "════ 12. version_var：只写变量、不碰 \$(subst) 派生式 ════"
+cp sing-box/Makefile "$T/s.new"
+replace_var_line "$T/s.new" "PKG_UPSTREAM_VERSION" "9.9.9-test"
+grep -q '^PKG_UPSTREAM_VERSION:=9.9.9-test$' "$T/s.new" \
+  && ok "PKG_UPSTREAM_VERSION 被改写" || bad "PKG_UPSTREAM_VERSION 未改写"
+[[ $(grep -c 'PKG_VERSION:=\$(subst' "$T/s.new") -eq 3 ]] \
+  && ok "3 条 PKG_VERSION:=\$(subst …) 派生式未被误伤" \
+  || bad "派生式被改动：$(grep -c 'PKG_VERSION:=\$(subst' "$T/s.new") 条"
+grep -q 'PKG_SOURCE_URL:=.*v\$(PKG_UPSTREAM_VERSION)?' "$T/s.new" \
+  && ok "PKG_SOURCE_URL 引用未被误伤" || bad "PKG_SOURCE_URL 被误伤"
+# 回环
+replace_var_line "$T/s.new" "PKG_UPSTREAM_VERSION" "$(read_var_line sing-box/Makefile PKG_UPSTREAM_VERSION)"
+diff -q sing-box/Makefile "$T/s.new" >/dev/null 2>&1 \
+  && ok "回环测试：写回原值后逐字节一致" || bad "回环失败：$(diff sing-box/Makefile "$T/s.new" | head -3 | tr '\n' ' ')"
+
 echo
 echo "════ 结果：通过 ${pass} / 失败 ${fail} ════"
 [[ $fail -eq 0 ]]

@@ -1,0 +1,33 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /usr/share/axonhub/runtime.sh
+
+STORAGE_HELPER=/usr/libexec/axonhub-find-storage
+
+format_timestamps() {
+	sed -E 's/([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2})(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})?/\1\/\2\/\3 \4/g'
+}
+
+format_syslog_timestamps() {
+	format_timestamps | sed -E 's/^.*([0-9]{4}\/[0-9]{2}\/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2})/\1/'
+}
+
+config_load axonhub
+config_get data_dir main data_dir 'auto'
+config_get_bool log_to_syslog main log_to_syslog 0
+
+if [ "$log_to_syslog" -eq 1 ]; then
+	logread -e 'axonhub' 2>/dev/null | tail -n 100 | format_syslog_timestamps
+	exit 0
+fi
+
+if [ "$data_dir" = 'auto' ]; then
+	data_dir="$($STORAGE_HELPER)" || exit 1
+fi
+data_dir="$(normalize_directory "$data_dir")"
+validate_directory "$data_dir" || exit 1
+
+log_file="$data_dir/axonhub.log"
+[ -f "$log_file" ] || exit 0
+tail -n 100 "$log_file" 2>/dev/null | format_timestamps

@@ -29,6 +29,40 @@
         ".github",
         ".gitattributes",
         "LICENSE",
+        "README.md",
+        "sing-box"
+      ],
+      "target": "."
+    },
+    {
+      "name": "nikki",
+      "repo": "nikkinikki-org/OpenWrt-nikki",
+      "ref": "main",
+      "dirs": [
+        "*"
+      ],
+      "exclude": [
+        ".github",
+        "LICENSE",
+        "README.md",
+        "README.zh.md",
+        "feed.sh",
+        "install.sh",
+        "uninstall.sh"
+      ],
+      "target": "."
+    },
+    {
+      "name": "vikingyfy-packages",
+      "repo": "VIKINGYFY/packages",
+      "ref": "main",
+      "dirs": [
+        "*"
+      ],
+      "exclude": [
+        ".github",
+        ".gitattributes",
+        "LICENSE",
         "README.md"
       ],
       "target": "."
@@ -74,10 +108,12 @@
       "makefile": "sing-box/Makefile",
       "strategy": "tarball",
       "source": "release",
-      "include_prerelease": false,
+      "include_prerelease": true,
       "tag_prefix": "v",
       "source_url": "https://codeload.github.com/SagerNet/sing-box/tar.gz/v${VERSION}?",
-      "reset_release_on_change": false
+      "reset_release_on_change": false,
+      "version_var": "PKG_UPSTREAM_VERSION",
+      "hash_var": "PKG_HASH"
     },
     {
       "name": "hysteria",
@@ -493,6 +529,83 @@
       "makefile": "smartdns/Makefile",
       "strategy": "notify",
       "note": "commit 型（PKG_SOURCE_VERSION），按上游 Release 说明手工升级"
+    },
+    {
+      "name": "nikki",
+      "makefile": "nikki/Makefile",
+      "strategy": "notify",
+      "note": "OpenWrt-nikki 自带封装，由 nikki 源码同步维护"
+    },
+    {
+      "name": "luci-app-nikki",
+      "makefile": "luci-app-nikki/Makefile",
+      "strategy": "notify",
+      "note": "由 nikki 源码同步维护"
+    },
+    {
+      "name": "mihomo-meta",
+      "makefile": "mihomo-meta/Makefile",
+      "strategy": "notify",
+      "note": "git-commit 型（PKG_SOURCE_PROTO:=git + PKG_SOURCE_VERSION），跟随上游正式版提醒",
+      "repo": "MetaCubeX/mihomo",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v"
+    },
+    {
+      "name": "mihomo-alpha",
+      "makefile": "mihomo-alpha/Makefile",
+      "strategy": "notify",
+      "note": "git-commit 型，跟随上游最新 tag（含 alpha）提醒",
+      "repo": "MetaCubeX/mihomo",
+      "source": "tag",
+      "include_prerelease": false,
+      "tag_prefix": "v"
+    },
+    {
+      "name": "axonhub",
+      "makefile": "axonhub/Makefile",
+      "strategy": "notify",
+      "note": "commit 型（PKG_SOURCE_VERSION + codeload tar.gz），上游以 tag 发布，需手工跟进",
+      "repo": "looplj/axonhub",
+      "source": "tag",
+      "include_prerelease": false,
+      "tag_prefix": ""
+    },
+    {
+      "name": "gecoosac",
+      "makefile": "gecoosac/Makefile",
+      "strategy": "notify",
+      "note": "多架构预编译二进制，由 VIKINGYFY/packages 的 release 分发",
+      "repo": "VIKINGYFY/packages",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "",
+      "version_regex": "^gecoosac-(.+)$"
+    },
+    {
+      "name": "luci-app-homeproxy",
+      "makefile": "luci-app-homeproxy/Makefile",
+      "strategy": "notify",
+      "note": "由 vikingyfy-packages 源码同步维护"
+    },
+    {
+      "name": "luci-app-wolultra",
+      "makefile": "luci-app-wolultra/Makefile",
+      "strategy": "notify",
+      "note": "由 vikingyfy-packages 源码同步维护"
+    },
+    {
+      "name": "luci-app-axonhub",
+      "makefile": "luci-app-axonhub/Makefile",
+      "strategy": "notify",
+      "note": "由 vikingyfy-packages 源码同步维护"
+    },
+    {
+      "name": "luci-app-gecoosac",
+      "makefile": "luci-app-gecoosac/Makefile",
+      "strategy": "notify",
+      "note": "由 vikingyfy-packages 源码同步维护"
     }
   ]
 }

@@ -1,0 +1,33 @@
+#!/bin/sh
+
+STORAGE_HELPER=/usr/libexec/axonhub-find-storage
+PORT_HELPER=/usr/libexec/axonhub-random-port
+
+data_dir="$(uci -q get axonhub.main.data_dir)"
+port="$(uci -q get axonhub.main.port)"
+changed=0
+
+if [ -z "$data_dir" ] || [ "$data_dir" = 'auto' ]; then
+	data_dir="$("$STORAGE_HELPER")" || exit 1
+	[ -n "$data_dir" ] || exit 1
+	uci -q set axonhub.main.data_dir="$data_dir"
+	changed=1
+fi
+
+if [ -z "$port" ] || [ "$port" = 'auto' ]; then
+	port="$("$PORT_HELPER")" || exit 1
+	[ -n "$port" ] || exit 1
+	uci -q set axonhub.main.port="$port"
+	changed=1
+fi
+
+[ "$changed" -eq 0 ] || uci -q commit axonhub
+
+uci -q batch <<-EOF >/dev/null
+	delete ucitrack.@axonhub[-1]
+	add ucitrack axonhub
+	set ucitrack.@axonhub[-1].init=axonhub
+	commit ucitrack
+EOF
+
+exit 0

@@ -1,0 +1,59 @@
+#!/bin/sh
+
+# Pick the largest writable persistent filesystem suitable for SQLite.
+best_blocks=0
+best_free=0
+best_mount=''
+
+while read -r device mountpoint fstype options rest; do
+	case "$fstype" in
+		ext2|ext3|ext4|f2fs|btrfs|xfs|ubifs|jffs2|zfs) ;;
+		*) continue ;;
+	esac
+
+	case "$mountpoint" in
+		/|/rom|/rom/*|/overlay|/boot|/tmp|/tmp/*|/var|/var/*|/proc|/proc/*|/sys|/sys/*|/dev|/dev/*) continue ;;
+	esac
+	case "$mountpoint" in
+		''|*[!A-Za-z0-9_./-]*) continue ;;
+	esac
+	case "$mountpoint" in
+		/*) ;;
+		*) continue ;;
+	esac
+	case "$mountpoint/" in
+		*/../*|*/./*|*//*) continue ;;
+	esac
+
+	case ",$options," in
+		*,ro,*) continue ;;
+	esac
+
+	[ -d "$mountpoint" ] && [ -w "$mountpoint" ] || continue
+
+	# df emits numeric fields; splitting the two selected fields is intentional.
+	# shellcheck disable=SC2046
+	set -- $(df -Pk "$mountpoint" 2>/dev/null | awk 'END { print $2, $4 }')
+	total_blocks="${1:-0}"
+	free_blocks="${2:-0}"
+
+	case "$total_blocks:$free_blocks" in
+		*[!0-9:]*|:*) continue ;;
+	esac
+
+	# Do not select tiny boot/config partitions.
+	[ "$free_blocks" -ge 262144 ] 2>/dev/null || continue
+
+	if [ "$total_blocks" -gt "$best_blocks" ] 2>/dev/null ||
+	   { [ "$total_blocks" -eq "$best_blocks" ] && [ "$free_blocks" -gt "$best_free" ]; }; then
+		best_blocks="$total_blocks"
+		best_free="$free_blocks"
+		best_mount="$mountpoint"
+	fi
+done < /proc/mounts
+
+if [ -n "$best_mount" ]; then
+	printf '%s/axonhub\n' "${best_mount%/}"
+else
+	printf '%s\n' '/etc/axonhub'
+fi
