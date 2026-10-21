@@ -68,6 +68,7 @@ bash update.sh --skip-source  # 只更新版本哈希
 | `passwall-packages` | `Openwrt-Passwall/openwrt-passwall-packages` | 17 个依赖包（**不含 `sing-box`**） |
 | `nikki` | `nikkinikki-org/OpenWrt-nikki` | `luci-app-nikki/` `nikki/` `mihomo-meta/` `mihomo-alpha/` |
 | `vikingyfy-packages` | `VIKINGYFY/packages` | `sing-box/` `axonhub/` `gecoosac/` `luci-app-homeproxy/` `luci-app-wolultra/` `luci-app-axonhub/` `luci-app-gecoosac/` |
+| `luci-theme-material3` | `KawaiiHachimi/luci-theme-material3` | **整个仓库** → `luci-theme-material3/`（`as_package` 模式） |
 
 > **`sing-box` 取自 `VIKINGYFY/packages`**（`passwall-packages` 的 `sing-box` 已加进 `exclude`）。
 > VIKINGYFY 的版本用 `PKG_UPSTREAM_VERSION` 承载（`PKG_VERSION` 由 `$(subst)` 派生），
@@ -92,11 +93,29 @@ bash update.sh --skip-source  # 只更新版本哈希
 | `dirs` | `["*"]` | 要拷贝的目录；`"*"` = 顶层全部条目 |
 | `exclude` | `[]` | `dirs` 含 `"*"` 时排除的条目 |
 | `target` | `.` | 落地目录（`.` = 仓库根目录） |
+| `as_package` | `false` | **上游整棵树就是一个包**，全部落到 `target` 目录内（先清空再拷） |
 | `skip_if_not_newer` | `true` | **版本闸门**，见下 |
 | `version_vars` | `["PKG_VERSION","PKG_UPSTREAM_VERSION","GEOIP_VER","GEOSITE_VER"]` | 参与版本比较的变量 |
 
 **行为**：按 `ref` 拉上游 commit SHA，SHA 没变就跳过；变了才下载。
-落地时整目录 `rm -rf` 后重拷，保证上游删除的文件不残留。
+
+* **默认模式**（`as_package: false`）：每个条目落到 `target/<条目>`，逐条 `rm -rf` 后重拷，
+  保证上游删除的文件不残留。
+* **`as_package: true`**：上游仓库**本身就是一个 OpenWrt 包**（如 LuCI 主题），
+  整棵树落到 `target` 目录内，**先清空 `target` 再拷**。
+  版本闸门以 `target/Makefile` 整包判定一次，
+  **判定为“忽略”时不会动本地目录**（不会先删再跳）。
+
+```json
+{
+  "name": "luci-theme-material3",
+  "repo": "KawaiiHachimi/luci-theme-material3",
+  "ref": "main",
+  "as_package": true,
+  "target": "luci-theme-material3",
+  "exclude": [".github", "Readme.md", "imgs"]
+}
+```
 
 ---
 

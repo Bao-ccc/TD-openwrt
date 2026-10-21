@@ -419,8 +419,13 @@ sync_source() {
   rm -f "$tmp_tar"
 
   # ---------- 4. 挑选目录 ----------
-  local dirs_json exclude_json
-  dirs_json=$(jq -c ".sources[$idx].dirs // [\"*\"]" "$CONFIG_FILE")
+  local dirs_json exclude_json as_pkg
+  as_pkg=$(cfg_get "$cfg" ".sources[$idx].as_package" "false")
+  if [[ "$as_pkg" == "true" ]]; then
+    dirs_json='["*"]'   # 整棵树就是一个包 → 顶层全部条目
+  else
+    dirs_json=$(jq -c ".sources[$idx].dirs // [\"*\"]" "$CONFIG_FILE")
+  fi
   exclude_json=$(jq -c ".sources[$idx].exclude // []" "$CONFIG_FILE")
 
   local items=()
@@ -444,31 +449,71 @@ sync_source() {
   fi
 
   # ---------- 5. 落地 ----------
+  # as_package=true：上游整棵树就是一个 OpenWrt 包，全部落到 target 目录内，
+  #                 先清空 target 保证上游删除的文件不残留
+  # as_package=false：每个条目落到 target/<条目>
   local gate ver_vars
   gate=$(cfg_get "$cfg" ".sources[$idx].skip_if_not_newer" "true")
   ver_vars=$(jq -r ".sources[$idx].version_vars // [\"PKG_VERSION\",\"PKG_UPSTREAM_VERSION\",\"GEOIP_VER\",\"GEOSITE_VER\"] | .[]" "$CONFIG_FILE" 2>/dev/null)
   local changed=0
   local copied=()
   local ignored=()
+  local it dst gate_up gate_loc
+
+  # as_package：整包先判一次版本闸门，**确定要同步才清空 target**，
+  # 否则会先删本地再判定跳过，等于丢数据
+  if [[ "$as_pkg" == "true" ]]; then
+    gate_up="$work/Makefile"
+    gate_loc="$target/Makefile"
+    if [[ "$FORCE" != "true" ]] && should_skip_source "$gate_up" "$gate_loc" "$gate" "$ver_vars"; then
+      local cmp_desc="" vv uu ll
+      while IFS= read -r vv; do
+        [[ -z "$vv" ]] && continue
+        uu=$(read_var_line "$gate_up" "$vv")
+        ll=$(read_var_line "$gate_loc" "$vv")
+        [[ -z "$uu" && -z "$ll" ]] && continue
+        is_literal_ver "$uu" || continue
+        is_literal_ver "$ll" || continue
+        cmp_desc+="${cmp_desc:+ }${vv}=${uu:-?}/${ll:-?}"
+      done <<< "$ver_vars"
+      log "[源码] ${name} 上游版本不高于本地（${cmp_desc:-无可比变量}），忽略同步"
+      ignored+=("$name")
+      rm -rf "$work"
+      write_state "$state_file" "$(jq -n \
+        --arg name "$name" --arg repo "$repo" --arg ref "$ref" --arg sha "$sha" \
+        --arg target "$target" --argjson copied '[]' --argjson ignored "[\"$name\"]" \
+        --arg updated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+        '{name:$name,repo:$repo,ref:$ref,sha:$sha,target:$target,copied:$copied,ignored:$ignored,updated_at:$updated_at}')"
+      return 0
+    fi
+    if [[ "$DRY_RUN" != "true" ]]; then
+      rm -rf "$target"   # 只有确定要同步才清空
+    fi
+  fi
+
   for it in "${items[@]}"; do
     [[ -e "$work/$it" ]] || { log "[警告] 上游没有 ${it}，跳过"; continue; }
-    local dst="${target}/${it}"
 
-    # 版本闸门：上游插件的所有版本变量都不高于本地 → 忽略该插件的同步
-    if [[ "$FORCE" != "true" ]]; then
-      if should_skip_source "$work/$it/Makefile" "$dst/Makefile" "$gate" "$ver_vars"; then
+    dst="${target}/${it}"
+    gate_up="$work/$it/Makefile"
+    gate_loc="$dst/Makefile"
+
+    # 版本闸门（非 as_package 时逐条目判定）
+    if [[ "$FORCE" != "true" && "$as_pkg" != "true" ]]; then
+      if should_skip_source "$gate_up" "$gate_loc" "$gate" "$ver_vars"; then
         local cmp_desc="" vv uu ll
         while IFS= read -r vv; do
           [[ -z "$vv" ]] && continue
-          uu=$(read_var_line "$work/$it/Makefile" "$vv")
-          ll=$(read_var_line "$dst/Makefile" "$vv")
+          uu=$(read_var_line "$gate_up" "$vv")
+          ll=$(read_var_line "$gate_loc" "$vv")
           [[ -z "$uu" && -z "$ll" ]] && continue
           is_literal_ver "$uu" || continue
           is_literal_ver "$ll" || continue
           cmp_desc+="${cmp_desc:+ }${vv}=${uu:-?}/${ll:-?}"
         done <<< "$ver_vars"
         log "[源码] ${it} 上游版本不高于本地（${cmp_desc:-无可比变量}），忽略同步"
-        ignored+=("$it"); continue
+        ignored+=("$it")
+        continue
       fi
     fi
 
@@ -486,7 +531,6 @@ sync_source() {
     changed=1
     log "[源码] 已同步 ${dst}"
   done
-
   rm -rf "$work"
 
   # ---------- 6. 状态 & 通知 ----------

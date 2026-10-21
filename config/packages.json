@@ -66,6 +66,18 @@
         "README.md"
       ],
       "target": "."
+    },
+    {
+      "name": "luci-theme-material3",
+      "repo": "KawaiiHachimi/luci-theme-material3",
+      "ref": "main",
+      "as_package": true,
+      "target": "luci-theme-material3",
+      "exclude": [
+        ".github",
+        "Readme.md",
+        "imgs"
+      ]
     }
   ],
   "packages": [
@@ -606,6 +618,12 @@
       "makefile": "luci-app-gecoosac/Makefile",
       "strategy": "notify",
       "note": "由 vikingyfy-packages 源码同步维护"
+    },
+    {
+      "name": "luci-theme-material3",
+      "makefile": "luci-theme-material3/Makefile",
+      "strategy": "notify",
+      "note": "luci.mk 主题（无 PKG_VERSION/PKG_HASH），由 luci-theme-material3 源码同步维护"
     }
   ]
 }
