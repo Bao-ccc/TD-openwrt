@@ -151,14 +151,14 @@ jobs:
             proxy-core)
               LIST="xray-core xray-plugin v2ray-plugin sing-box hysteria shadowsocks-rust \
                     shadow-tls naiveproxy chinadns-ng geoview microsocks tcping simple-obfs \
-                    mihomo-meta mihomo-alpha" ;;
+                    mihomo-meta" ;;
             passwall)
               LIST="luci-app-passwall xray-core xray-plugin v2ray-plugin sing-box hysteria \
                     shadowsocks-rust shadow-tls shadowsocksr-libev naiveproxy chinadns-ng \
                     dns2socks geoview microsocks tcping simple-obfs ipt2socks v2ray-geodata \
                     smartdns" ;;
             nikki)
-              LIST="luci-app-nikki nikki mihomo-meta mihomo-alpha" ;;
+              LIST="luci-app-nikki nikki mihomo-meta" ;;
             theme)
               LIST=$(echo "$ALL" | tr ' ' '\n' | grep -E '^luci-theme-' | tr '\n' ' ') ;;
             custom)
