@@ -17,8 +17,7 @@
 
 ## 目录布局
 
-**插件包 / 软件包目录直接放在仓库根目录**，不嵌套二级目录
-（与 [`VIKINGYFY/packages`](https://github.com/VIKINGYFY/packages) 同布局）：
+**插件包 / 软件包目录直接放在仓库根目录**，不嵌套二级目录：
 
 ```
 your-repo/                        ← 仓库根目录 = 一个 OpenWrt package feed
@@ -76,8 +75,8 @@ bash update.sh --skip-source  # 只更新版本哈希
 
 ```json
 {
-  "name": "vikingyfy-packages",
-  "repo": "VIKINGYFY/packages",
+  "name": "xiaojing110-package",
+  "repo": "xiaojing110/package",
   "ref": "main",
   "dirs": ["*"],
   "exclude": [".github", ".gitattributes", "LICENSE", "README.md"],
