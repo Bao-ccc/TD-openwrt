@@ -120,6 +120,19 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+          # ========== 强制使用 Golang 1.27.3 ==========
+          echo "→ 替换 golang 为 1.27.3"
+          rm -rf feeds/packages/lang/golang
+          git clone --depth 1 --branch openwrt-25.12 \
+            https://github.com/openwrt/packages.git /tmp/owrt-packages
+          cp -a /tmp/owrt-packages/lang/golang feeds/packages/lang/golang
+          rm -rf /tmp/owrt-packages
+          ./scripts/feeds install -a
+          echo "→ 当前 golang 版本信息:"
+          grep -E 'GO_VERSION_MAJOR_MINOR|GO_VERSION_PATCH|GO_DEFAULT_VERSION' \
+            feeds/packages/lang/golang/golang-values.mk \
+            feeds/packages/lang/golang/golang1.27/Makefile 2>/dev/null || true
+
       - name: Resolve package list
         run: |
           set -euo pipefail
@@ -180,7 +193,6 @@ jobs:
             echo "→ package/$p"
           done
 
-      # ========== 并行编译 ==========
       - name: Build
         run: |
           set -uo pipefail
@@ -190,51 +202,53 @@ jobs:
           mkdir -p ../build-logs
           : > ../build-result.txt
 
-          # 把包名转成 make 目标：package/xxx/compile
           TARGETS=""
           for p in $(cat ../pkglist.txt); do
             TARGETS="$TARGETS package/$p/compile"
           done
 
           echo "=============================================================="
-          echo "▶ 并行编译所有包 ($(nproc) 核)"
+          echo "▶ 并行编译所有包 ($(nproc) 核)  [失败继续 -k]"
           echo "  目标: $TARGETS"
           echo "=============================================================="
 
-          # 一次 make 全部并行编译，日志统一写到 all.log
-          # 失败后继续跑完，方便收集所有结果
+          # -k : 某个包失败后继续编译其余包
           set +e
-          make $TARGETS -j"$(nproc)" V=s \
+          make $TARGETS -j"$(nproc)" -k V=s \
             > ../build-logs/all.log 2>&1
           MAKE_RC=$?
           set -e
 
-          # 根据是否生成对应 ipk/apk 判断每个包成功与否
+          # 根据是否真正生成了 ipk/apk 判断每个包结果
           for p in $(cat ../pkglist.txt); do
-            # 兼容 .ipk (≤24.x) 和 .apk (25.x+)
-            if find bin -type f \( -name "${p}_*.ipk" -o -name "${p}-*.apk" -o -name "${p}_*.apk" \) 2>/dev/null | grep -q .; then
+            if find bin -type f \( \
+                 -name "${p}_*.ipk" -o \
+                 -name "${p}-*.apk" -o \
+                 -name "${p}_*.apk" \
+               \) 2>/dev/null | grep -q .; then
               echo "✅ $p"
               echo "ok   $p" >> ../build-result.txt
             else
               echo "❌ $p"
               echo "fail $p" >> ../build-result.txt
-              # 把该包相关错误提取到单独日志，方便查看
-              grep -E "(^make\[|/package/$p/|ERROR:|error:)" ../build-logs/all.log \
-                | tail -80 > "../build-logs/$p.log" 2>/dev/null || true
+              # 抽取该包相关错误到单独日志
+              grep -E "(^make\[|/package/$p/|ERROR:|error:|Patch failed|FAILED)" \
+                ../build-logs/all.log 2>/dev/null \
+                | tail -120 > "../build-logs/$p.log" || true
             fi
           done
 
           echo "=============================================================="
-          echo "结果:"
+          echo "结果汇总:"
           cat ../build-result.txt
+          echo "=============================================================="
 
           if grep -q '^fail ' ../build-result.txt; then
-            echo "::error::有包编译失败，详见 build-logs 产物"
+            echo "::error::部分包编译失败，详见 build-logs 产物"
             exit 1
           fi
-          # 如果 make 本身返回非 0 但所有包都找到了产物，也算成功
-          # （某些警告会导致 make 返回非 0）
-          if [ $MAKE_RC -ne 0 ] && ! grep -q '^fail ' ../build-result.txt; then
+
+          if [ "$MAKE_RC" -ne 0 ]; then
             echo "::warning::make 返回码 $MAKE_RC，但所有包产物均已生成"
           fi
 
