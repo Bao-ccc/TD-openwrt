@@ -1,0 +1,7 @@
+# 每 6 小时跑一次（本地 crontab 示例）
+# 安装：crontab -e 然后粘贴下面一行（把路径换成你的实际路径）
+#
+# 15 */6 * * * cd /path/to/github-release-sync && /usr/bin/env bash ./update.sh >> sync.log 2>&1
+#
+# 只在每天 08:00 跑一次：
+# 0 8 * * * cd /path/to/github-release-sync && /usr/bin/env bash ./update.sh >> sync.log 2>&1

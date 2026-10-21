@@ -1,0 +1,8 @@
+# 运行时状态
+.state/
+*.tmp
+
+# 系统/编辑器
+.DS_Store
+*.swp
+Thumbs.db

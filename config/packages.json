@@ -1,0 +1,498 @@
+{
+  "sources": [
+    {
+      "name": "luci-app-passwall",
+      "repo": "Openwrt-Passwall/openwrt-passwall",
+      "ref": "main",
+      "dirs": [
+        "luci-app-passwall"
+      ],
+      "target": "."
+    },
+    {
+      "name": "luci-app-passwall2",
+      "repo": "Openwrt-Passwall/openwrt-passwall2",
+      "ref": "main",
+      "dirs": [
+        "luci-app-passwall2"
+      ],
+      "target": "."
+    },
+    {
+      "name": "passwall-packages",
+      "repo": "Openwrt-Passwall/openwrt-passwall-packages",
+      "ref": "main",
+      "dirs": [
+        "*"
+      ],
+      "exclude": [
+        ".github",
+        ".gitattributes",
+        "LICENSE",
+        "README.md"
+      ],
+      "target": "."
+    }
+  ],
+  "packages": [
+    {
+      "name": "xray-core",
+      "repo": "XTLS/Xray-core",
+      "makefile": "xray-core/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": true,
+      "tag_prefix": "v",
+      "source_url": "https://codeload.github.com/XTLS/Xray-core/tar.gz/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "xray-plugin",
+      "repo": "teddysun/xray-plugin",
+      "makefile": "xray-plugin/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v",
+      "source_url": "https://codeload.github.com/teddysun/xray-plugin/tar.gz/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "v2ray-plugin",
+      "repo": "teddysun/v2ray-plugin",
+      "makefile": "v2ray-plugin/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v",
+      "source_url": "https://codeload.github.com/teddysun/v2ray-plugin/tar.gz/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "sing-box",
+      "repo": "SagerNet/sing-box",
+      "makefile": "sing-box/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v",
+      "source_url": "https://codeload.github.com/SagerNet/sing-box/tar.gz/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "hysteria",
+      "repo": "apernet/hysteria",
+      "makefile": "hysteria/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "app/v",
+      "source_url": "https://codeload.github.com/apernet/hysteria/tar.gz/app/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "geoview",
+      "repo": "snowie2000/geoview",
+      "makefile": "geoview/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "",
+      "source_url": "https://codeload.github.com/snowie2000/geoview/tar.gz/${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "shadow-tls",
+      "repo": "ihciah/shadow-tls",
+      "makefile": "shadow-tls/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v",
+      "source_url": "https://codeload.github.com/ihciah/shadow-tls/tar.gz/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "shadowsocks-rust",
+      "repo": "shadowsocks/shadowsocks-rust",
+      "makefile": "shadowsocks-rust/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v",
+      "source_url": "https://codeload.github.com/shadowsocks/shadowsocks-rust/tar.gz/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "ipt2socks",
+      "repo": "zfl9/ipt2socks",
+      "makefile": "ipt2socks/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v",
+      "source_url": "https://codeload.github.com/zfl9/ipt2socks/tar.gz/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "microsocks",
+      "repo": "rofl0r/microsocks",
+      "makefile": "microsocks/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v",
+      "source_url": "https://codeload.github.com/rofl0r/microsocks/tar.gz/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "chinadns-ng",
+      "repo": "zfl9/chinadns-ng",
+      "makefile": "chinadns-ng/Makefile",
+      "strategy": "assets",
+      "version": {
+        "repo": "zfl9/chinadns-ng",
+        "source": "release",
+        "include_prerelease": true,
+        "tag_prefix": ""
+      },
+      "assets": [
+        {
+          "id": "chinadns-ng+wolfssl@aarch64-linux-musl@generic+v8a@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@aarch64-linux-musl@generic+v8a@fast+lto",
+          "asset": "chinadns-ng+wolfssl@aarch64-linux-musl@generic+v8a@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl_noasm@aarch64-linux-musl@generic+v8a@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl_noasm@aarch64-linux-musl@generic+v8a@fast+lto",
+          "asset": "chinadns-ng+wolfssl_noasm@aarch64-linux-musl@generic+v8a@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@arm-linux-musleabi@generic+v6+soft_float@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@arm-linux-musleabi@generic+v6+soft_float@fast+lto",
+          "asset": "chinadns-ng+wolfssl@arm-linux-musleabi@generic+v6+soft_float@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@arm-linux-musleabihf@generic+v7a@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@arm-linux-musleabihf@generic+v7a@fast+lto",
+          "asset": "chinadns-ng+wolfssl@arm-linux-musleabihf@generic+v7a@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@arm-linux-musleabi@generic+v5te+soft_float@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@arm-linux-musleabi@generic+v5te+soft_float@fast+lto",
+          "asset": "chinadns-ng+wolfssl@arm-linux-musleabi@generic+v5te+soft_float@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@mips-linux-musl@mips32+soft_float@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@mips-linux-musl@mips32+soft_float@fast+lto",
+          "asset": "chinadns-ng+wolfssl@mips-linux-musl@mips32+soft_float@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@mipsel-linux-musl@mips32+soft_float@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@mipsel-linux-musl@mips32+soft_float@fast+lto",
+          "asset": "chinadns-ng+wolfssl@mipsel-linux-musl@mips32+soft_float@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@mipsel-linux-musl@mips32@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@mipsel-linux-musl@mips32@fast+lto",
+          "asset": "chinadns-ng+wolfssl@mipsel-linux-musl@mips32@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@mips64-linux-musl@mips64+soft_float@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@mips64-linux-musl@mips64+soft_float@fast+lto",
+          "asset": "chinadns-ng+wolfssl@mips64-linux-musl@mips64+soft_float@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@mips64el-linux-musl@mips64+soft_float@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@mips64el-linux-musl@mips64+soft_float@fast+lto",
+          "asset": "chinadns-ng+wolfssl@mips64el-linux-musl@mips64+soft_float@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@i386-linux-musl@i686@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@i386-linux-musl@i686@fast+lto",
+          "asset": "chinadns-ng+wolfssl@i386-linux-musl@i686@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@i386-linux-musl@pentium4@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@i386-linux-musl@pentium4@fast+lto",
+          "asset": "chinadns-ng+wolfssl@i386-linux-musl@pentium4@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@x86_64-linux-musl@x86_64@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@x86_64-linux-musl@x86_64@fast+lto",
+          "asset": "chinadns-ng+wolfssl@x86_64-linux-musl@x86_64@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "chinadns-ng+wolfssl@riscv64-linux-musl@baseline_rv64@fast+lto",
+          "anchor": "PKG_ARCH:=chinadns-ng+wolfssl@riscv64-linux-musl@baseline_rv64@fast+lto",
+          "asset": "chinadns-ng+wolfssl@riscv64-linux-musl@baseline_rv64@fast+lto",
+          "url": "https://github.com/zfl9/chinadns-ng/releases/download/${VERSION}/${ASSET}?",
+          "hash_var": "PKG_HASH"
+        }
+      ]
+    },
+    {
+      "name": "naiveproxy",
+      "repo": "klzgrad/naiveproxy",
+      "makefile": "naiveproxy/Makefile",
+      "strategy": "assets",
+      "version": {
+        "repo": "klzgrad/naiveproxy",
+        "source": "release",
+        "include_prerelease": true,
+        "version_regex": "^v(.+)-([0-9]+)$"
+      },
+      "assets": [
+        {
+          "id": "aarch64_cortex-a53",
+          "anchor": "ifeq ($(ARCH_PREBUILT),aarch64_cortex-a53)",
+          "asset": "aarch64_cortex-a53",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "aarch64_cortex-a72",
+          "anchor": "ifeq ($(ARCH_PREBUILT),aarch64_cortex-a72)",
+          "asset": "aarch64_cortex-a72",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "aarch64_generic",
+          "anchor": "ifeq ($(ARCH_PREBUILT),aarch64_generic)",
+          "asset": "aarch64_generic",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_arm1176jzf-s_vfp",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_arm1176jzf-s_vfp)",
+          "asset": "arm_arm1176jzf-s_vfp",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_arm926ej-s",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_arm926ej-s)",
+          "asset": "arm_arm926ej-s",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_cortex-a15_neon-vfpv4",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_cortex-a15_neon-vfpv4)",
+          "asset": "arm_cortex-a15_neon-vfpv4",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_cortex-a5_vfpv4",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_cortex-a5_vfpv4)",
+          "asset": "arm_cortex-a5_vfpv4",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_cortex-a7",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_cortex-a7)",
+          "asset": "arm_cortex-a7",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_cortex-a7_neon-vfpv4",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_cortex-a7_neon-vfpv4)",
+          "asset": "arm_cortex-a7_neon-vfpv4",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_cortex-a7_vfpv4",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_cortex-a7_vfpv4)",
+          "asset": "arm_cortex-a7_vfpv4",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_cortex-a8_vfpv3",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_cortex-a8_vfpv3)",
+          "asset": "arm_cortex-a8_vfpv3",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_cortex-a9",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_cortex-a9)",
+          "asset": "arm_cortex-a9",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_cortex-a9_neon",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_cortex-a9_neon)",
+          "asset": "arm_cortex-a9_neon",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_cortex-a9_vfpv3-d16",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_cortex-a9_vfpv3-d16)",
+          "asset": "arm_cortex-a9_vfpv3-d16",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_mpcore",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_mpcore)",
+          "asset": "arm_mpcore",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "arm_xscale",
+          "anchor": "ifeq ($(ARCH_PREBUILT),arm_xscale)",
+          "asset": "arm_xscale",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "mipsel_24kc",
+          "anchor": "ifeq ($(ARCH_PREBUILT),mipsel_24kc)",
+          "asset": "mipsel_24kc",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "mipsel_mips32",
+          "anchor": "ifeq ($(ARCH_PREBUILT),mipsel_mips32)",
+          "asset": "mipsel_mips32",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "riscv64",
+          "anchor": "ifeq ($(ARCH_PREBUILT),riscv64)",
+          "asset": "riscv64",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "x86",
+          "anchor": "ifeq ($(ARCH_PREBUILT),x86)",
+          "asset": "x86",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        },
+        {
+          "id": "x86_64",
+          "anchor": "ifeq ($(ARCH_PREBUILT),x86_64)",
+          "asset": "x86_64",
+          "url": "https://github.com/klzgrad/naiveproxy/releases/download/v${VERSION}-${RELEASE}/naiveproxy-v${VERSION}-${RELEASE}-openwrt-${ASSET}.tar.xz",
+          "hash_var": "PKG_HASH"
+        }
+      ]
+    },
+    {
+      "name": "v2ray-geodata",
+      "repo": "Loyalsoldier/geoip",
+      "makefile": "v2ray-geodata/Makefile",
+      "strategy": "assets",
+      "assets": [
+        {
+          "id": "geoip",
+          "anchor": "define Download/geoip",
+          "asset": "geoip.dat",
+          "url": "https://github.com/Loyalsoldier/geoip/releases/download/${VERSION}/${ASSET}",
+          "hash_var": "HASH",
+          "ver_anchor": "GEOIP_VER:=",
+          "ver_line": "GEOIP_VER:=${VERSION}",
+          "version": {
+            "repo": "Loyalsoldier/geoip",
+            "source": "release",
+            "include_prerelease": true,
+            "tag_prefix": ""
+          }
+        },
+        {
+          "id": "geosite",
+          "anchor": "define Download/geosite",
+          "asset": "geosite.dat",
+          "url": "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/${VERSION}/${ASSET}",
+          "hash_var": "HASH",
+          "ver_anchor": "GEOSITE_VER:=",
+          "ver_line": "GEOSITE_VER:=${VERSION}",
+          "version": {
+            "repo": "Loyalsoldier/v2ray-rules-dat",
+            "source": "release",
+            "include_prerelease": true,
+            "tag_prefix": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "dns2socks",
+      "makefile": "dns2socks/Makefile",
+      "strategy": "notify",
+      "note": "源码内嵌于包目录，由 openwrt-passwall-packages 上游源码同步维护"
+    },
+    {
+      "name": "shadowsocksr-libev",
+      "makefile": "shadowsocksr-libev/Makefile",
+      "strategy": "notify",
+      "note": "源码内嵌于包目录，由 openwrt-passwall-packages 上游源码同步维护"
+    },
+    {
+      "name": "simple-obfs",
+      "makefile": "simple-obfs/Makefile",
+      "strategy": "notify",
+      "note": "git-commit 型（PKG_SOURCE_PROTO:=git + PKG_MIRROR_HASH），跟随上游 tag 提醒",
+      "repo": "shadowsocks/simple-obfs",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v"
+    },
+    {
+      "name": "tcping",
+      "makefile": "tcping/Makefile",
+      "strategy": "notify",
+      "note": "git-commit 型（PKG_SOURCE_VERSION），上游无 tag，仅记录跟踪",
+      "repo": "Lienol/tcping",
+      "source": "tag",
+      "include_prerelease": false,
+      "tag_prefix": ""
+    },
+    {
+      "name": "smartdns",
+      "makefile": "smartdns/Makefile",
+      "strategy": "notify",
+      "note": "commit 型（PKG_SOURCE_VERSION），按上游 Release 说明手工升级"
+    }
+  ]
+}
