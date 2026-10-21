@@ -277,6 +277,93 @@ export WXPUSHER_TOPIC_IDS="123,456"
 
 ---
 
+## 🔨 GitHub Actions 编译插件
+
+`.github/workflows/build.yml` —— 用 **OpenWrt SDK** 在 Actions 里交叉编译插件，
+产物（`.ipk` / `.apk`）作为 artifact 下载。
+
+仓库 → **Actions → Build Packages → Run workflow**
+
+### 选平台（默认 X86_64）
+
+| 选项 | 说明 |
+|---|---|
+| **`x86/64`** | **X86_64（默认）** |
+| `x86/generic` | X86 32 位 |
+| `armsr/armv8` | AArch64 通用 |
+| `armsr/armv7` | ARMv7 通用 |
+| `rockchip/armv8` | Rockchip RK33xx / RK35xx |
+| `bcm27xx/bcm2711` | 树莓派 4 / 5 (aarch64) |
+| `bcm27xx/bcm2710` | 树莓派 2 / 3 |
+| `mediatek/filogic` | MTK Filogic (aarch64) |
+| `ramips/mt7621` | MTK MT7621 (mipsel) |
+| `ramips/mt76x8` | MTK MT76x8 (mipsel) |
+| `ath79/generic` | Atheros AR7xxx (mips) |
+| `ipq807x/generic` | 高通 IPQ807x (aarch64) |
+| `sunxi/cortexa8` | 全志 H3 |
+
+### 选编译哪些插件（`preset`）
+
+| preset | 内容 |
+|---|---|
+| **`all`** | **全部 31 个包（默认）** |
+| `luci-app` | 所有 `luci-app-*` |
+| `theme` | 所有 `luci-theme-*` |
+| `proxy-core` | `xray-core` `sing-box` `hysteria` `shadowsocks-rust` `mihomo-*` `naiveproxy` `chinadns-ng` 等 15 个 |
+| `passwall` | passwall 全家桶 19 个（luci-app + 全部依赖） |
+| `nikki` | nikki 全家桶 4 个 |
+| `custom` | 自己填，用 `packages` 输入 |
+
+`custom` 时在 `packages` 里填包名，**空格或逗号分隔**，例如：
+
+```
+luci-app-passwall, xray-core, sing-box
+```
+
+### 其他参数
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `openwrt_version` | `25.12.6` | 也可填 `24.10.5` / `snapshot` |
+| `upload_all` | `false` | 开启则连 `-dbg` / `-dev` 一起上传 |
+
+### 实现要点
+
+* **SDK 文件名动态解析**：`openwrt-sdk-<ver>-<target>-<subtarget>_gcc-<gcc>_musl.Linux-x86_64.tar.zst`
+  里的 GCC 版本会随 OpenWrt 版本变（25.12 是 `gcc-14.3.0`，24.10 是 `gcc-13.3.0`），
+  硬编码必失效。改为**拉目录列表正则匹配**，任何版本/平台都能解析。
+* **`.ipk` / `.apk` 都收**：OpenWrt 25.x 换成 `apk` 包管理，24.x 及以前是 `ipk`。
+* **包名冲突处理**：官方 `packages` feed 里可能有同名包（如 `microsocks`），
+  注入前先删掉 `package/feeds/**/<name>`，保证用的是本仓库版本。
+* **单包失败不拖垮整个 job**：逐包编译，失败的记进 `build-result.txt` 并在
+  Summary 里列出，产物与日志仍会上传。
+* **产物**：
+  * `packages` —— 编译出的 `.ipk`/`.apk`
+  * `build-logs` —— 每个包一份完整 `V=s` 编译日志（失败时排查用）
+
+### 本地跑同样的事
+
+```bash
+# 1. 下 SDK（以 x86/64 + 25.12.6 为例）
+BASE=https://downloads.openwrt.org/releases/25.12.6/targets/x86/64
+SDK=$(curl -sL "$BASE/" | grep -oE 'openwrt-sdk-[^"<]+\.Linux-x86_64\.tar\.(zst|xz)' | sort -u | head -1)
+curl -LO "$BASE/$SDK"
+
+# 2. 解压 + feeds
+mkdir sdk && tar --zstd -xf "$SDK" -C sdk --strip-components=1
+cd sdk && ./scripts/feeds update -a && ./scripts/feeds install -a
+
+# 3. 放包 + 编译
+cp -a ../xray-core ../sing-box package/
+make defconfig
+make package/xray-core/compile -j$(nproc) V=s
+
+# 4. 产物
+ls bin/packages/*/*/*.ipk bin/packages/*/*/*.apk 2>/dev/null
+```
+
+---
+
 ## 状态文件
 
 ```
