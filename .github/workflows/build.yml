@@ -121,15 +121,17 @@ jobs:
           ./scripts/feeds install -a
 
           # ========== 强制使用 Golang 1.27.3 ==========
-          echo "→ 替换 golang 为 1.27.3"
+                    echo "→ 替换 golang 为 1.27.3（master）"
           rm -rf feeds/packages/lang/golang
-          git clone --depth 1 --branch openwrt-25.12 \
+          git clone --depth 1 \
             https://github.com/openwrt/packages.git /tmp/owrt-packages
           cp -a /tmp/owrt-packages/lang/golang feeds/packages/lang/golang
           rm -rf /tmp/owrt-packages
+
           ./scripts/feeds install -a
+
           echo "→ 当前 golang 版本信息:"
-          grep -E 'GO_VERSION_MAJOR_MINOR|GO_VERSION_PATCH|GO_DEFAULT_VERSION' \
+          grep -E 'GO_DEFAULT_VERSION|GO_VERSION_MAJOR_MINOR|GO_VERSION_PATCH' \
             feeds/packages/lang/golang/golang-values.mk \
             feeds/packages/lang/golang/golang1.27/Makefile 2>/dev/null || true
 
