@@ -48,6 +48,7 @@
         "README.zh.md",
         "feed.sh",
         "install.sh",
+        "mihomo-alpha",
         "uninstall.sh"
       ],
       "target": "."
