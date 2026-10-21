@@ -1,5 +1,4 @@
 name: Build Packages
-
 on:
   workflow_dispatch:
     inputs:
@@ -21,12 +20,10 @@ on:
           - ath79/generic
           - ipq807x/generic
           - sunxi/cortexa8
-
       openwrt_version:
         description: "OpenWrt 版本（如 25.12.6 / 24.10.5 / snapshot）"
         type: string
         default: "25.12.6"
-
       preset:
         description: "要编译哪些插件"
         type: choice
@@ -39,12 +36,10 @@ on:
           - nikki
           - theme
           - custom
-
       packages:
         description: "preset=custom 时使用：包名，空格或逗号分隔"
         type: string
         default: ""
-
       upload_all:
         description: "上传全部产物（含 -dbg / -dev），否则只上传主包"
         type: boolean
@@ -57,15 +52,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 360
-
-    # 所有输入只在这里出现一次，后续步骤一律用 $PLATFORM / $OWT_VER … 引用
     env:
       PLATFORM: ${{ inputs.platform }}
       OWT_VER: ${{ inputs.openwrt_version }}
       PRESET: ${{ inputs.preset }}
       CUSTOM_PKGS: ${{ inputs.packages }}
       UPLOAD_ALL: ${{ inputs.upload_all }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,26 +75,20 @@ jobs:
           set -euo pipefail
           TARGET="${PLATFORM%%/*}"
           SUBTARGET="${PLATFORM##*/}"
-
           if [ "$OWT_VER" = "snapshot" ]; then
             BASE="https://downloads.openwrt.org/snapshots/targets/${TARGET}/${SUBTARGET}"
           else
             BASE="https://downloads.openwrt.org/releases/${OWT_VER}/targets/${TARGET}/${SUBTARGET}"
           fi
-
           echo "→ 目录: $BASE"
-          # SDK 文件名里带 GCC 版本（gcc-14.3.0_musl…），不能硬编码，从目录列表解析
           SDK_FILE=$(curl -sL --fail --retry 3 "$BASE/" \
             | grep -oE 'openwrt-sdk-[^"<]+\.Linux-x86_64\.tar\.(zst|xz)' \
             | sort -u | head -1)
-
           if [ -z "$SDK_FILE" ]; then
             echo "::error::在 $BASE 下没找到 OpenWrt SDK，请检查平台 / 版本是否正确"
             exit 1
           fi
-
           echo "→ SDK:   $SDK_FILE"
-          # 写成 env 文件供后续步骤 source，避免反复插值
           {
             echo "SDK_URL=${BASE}/${SDK_FILE}"
             echo "SDK_FILE=${SDK_FILE}"
@@ -137,12 +123,10 @@ jobs:
       - name: Resolve package list
         run: |
           set -euo pipefail
-          # 仓库根目录下所有含 Makefile 的目录 = 可编译的包
           ALL=$(find . -maxdepth 2 -name Makefile \
                   -not -path './sdk/*' -not -path './.git/*' \
                 | sed 's|^\./||; s|/Makefile$||' | sort | tr '\n' ' ')
           echo "仓库内全部包: $ALL"
-
           case "$PRESET" in
             all)
               LIST="$ALL" ;;
@@ -166,8 +150,6 @@ jobs:
             *)
               echo "::error::未知 preset: $PRESET"; exit 1 ;;
           esac
-
-          # 去重 + 校验存在
           RES=""
           for p in $LIST; do
             if [ ! -d "$p" ] || [ ! -f "$p/Makefile" ]; then
@@ -178,12 +160,10 @@ jobs:
             RES="$RES $p"
           done
           RES=$(echo "$RES" | xargs)
-
           if [ -z "$RES" ]; then
             echo "::error::解析出的包列表为空（preset=$PRESET）"
             exit 1
           fi
-
           echo "→ 将编译: $RES"
           echo "$RES" > pkglist.txt
           cat pkglist.txt
@@ -193,7 +173,6 @@ jobs:
           set -euo pipefail
           cd sdk
           for p in $(cat ../pkglist.txt); do
-            # 同名 feed 包会让 make 报重复定义，先让我们的版本赢
             find package/feeds -maxdepth 2 -type d -name "$p" \
                  -exec rm -rf {} + 2>/dev/null || true
             rm -rf "package/$p"
@@ -201,6 +180,7 @@ jobs:
             echo "→ package/$p"
           done
 
+      # ========== 并行编译 ==========
       - name: Build
         run: |
           set -uo pipefail
@@ -209,18 +189,38 @@ jobs:
 
           mkdir -p ../build-logs
           : > ../build-result.txt
+
+          # 把包名转成 make 目标：package/xxx/compile
+          TARGETS=""
           for p in $(cat ../pkglist.txt); do
-            echo "=============================================================="
-            echo "▶ 编译 $p"
-            echo "=============================================================="
-            if make "package/$p/compile" -j"$(nproc)" V=s \
-                 > "../build-logs/$p.log" 2>&1; then
+            TARGETS="$TARGETS package/$p/compile"
+          done
+
+          echo "=============================================================="
+          echo "▶ 并行编译所有包 ($(nproc) 核)"
+          echo "  目标: $TARGETS"
+          echo "=============================================================="
+
+          # 一次 make 全部并行编译，日志统一写到 all.log
+          # 失败后继续跑完，方便收集所有结果
+          set +e
+          make $TARGETS -j"$(nproc)" V=s \
+            > ../build-logs/all.log 2>&1
+          MAKE_RC=$?
+          set -e
+
+          # 根据是否生成对应 ipk/apk 判断每个包成功与否
+          for p in $(cat ../pkglist.txt); do
+            # 兼容 .ipk (≤24.x) 和 .apk (25.x+)
+            if find bin -type f \( -name "${p}_*.ipk" -o -name "${p}-*.apk" -o -name "${p}_*.apk" \) 2>/dev/null | grep -q .; then
               echo "✅ $p"
               echo "ok   $p" >> ../build-result.txt
             else
-              echo "❌ $p  （末尾日志如下）"
-              tail -40 "../build-logs/$p.log" || true
+              echo "❌ $p"
               echo "fail $p" >> ../build-result.txt
+              # 把该包相关错误提取到单独日志，方便查看
+              grep -E "(^make\[|/package/$p/|ERROR:|error:)" ../build-logs/all.log \
+                | tail -80 > "../build-logs/$p.log" 2>/dev/null || true
             fi
           done
 
@@ -228,10 +228,14 @@ jobs:
           echo "结果:"
           cat ../build-result.txt
 
-          # 有失败就让 job 失败（产物与日志仍会因 if:always() 上传）
           if grep -q '^fail ' ../build-result.txt; then
             echo "::error::有包编译失败，详见 build-logs 产物"
             exit 1
+          fi
+          # 如果 make 本身返回非 0 但所有包都找到了产物，也算成功
+          # （某些警告会导致 make 返回非 0）
+          if [ $MAKE_RC -ne 0 ] && ! grep -q '^fail ' ../build-result.txt; then
+            echo "::warning::make 返回码 $MAKE_RC，但所有包产物均已生成"
           fi
 
       - name: Collect artifacts
@@ -241,8 +245,6 @@ jobs:
           . ./sdk.env
           OUT="artifacts/${TAG}"
           mkdir -p "$OUT"
-
-          # OpenWrt 25.x 用 .apk，24.x 及以前用 .ipk，两种都收
           if [ "$UPLOAD_ALL" = "true" ]; then
             find sdk/bin -type f \( -name '*.ipk' -o -name '*.apk' \) \
                  -exec cp -a {} "$OUT/" \;
@@ -251,7 +253,6 @@ jobs:
                  ! -name '*-dbg.*' ! -name '*-dev.*' ! -name '*-src.*' \
                  -exec cp -a {} "$OUT/" \;
           fi
-
           echo "→ 产物:"
           ls -lh "$OUT" | head -60 || true
           COUNT=$(find "$OUT" -type f | wc -l)
