@@ -19,11 +19,12 @@ on:
           - ramips/mt7621
           - ramips/mt76x8
           - ath79/generic
-          - ipq807x/generic
+          - qualcommax/ipq807x
+          - qualcommax/ipq60xx
           - sunxi/cortexa8
 
       openwrt_version:
-        description: "OpenWrt 版本（如 25.12.6 / 24.10.5 / snapshot）"
+        description: "OpenWrt 版本（snapshot / 25.12.6 / 24.10.5）"
         type: string
         default: "snapshot"
 
@@ -90,14 +91,14 @@ jobs:
             proxy-core)
               LIST="xray-core xray-plugin v2ray-plugin sing-box hysteria shadowsocks-rust \
                     shadow-tls naiveproxy chinadns-ng geoview microsocks tcping simple-obfs \
-                    mihomo-meta mihomo-alpha mosdns geo2txt" ;;
+                    mihomo-meta mosdns geo2txt" ;;
             passwall)
               LIST="luci-app-passwall xray-core xray-plugin v2ray-plugin sing-box hysteria \
                     shadowsocks-rust shadow-tls shadowsocksr-libev naiveproxy chinadns-ng \
                     dns2socks geoview microsocks tcping simple-obfs ipt2socks v2ray-geodata \
                     smartdns" ;;
             nikki)
-              LIST="luci-app-nikki nikki mihomo-meta mihomo-alpha" ;;
+              LIST="luci-app-nikki nikki mihomo-meta" ;;
             mosdns)
               LIST="luci-app-mosdns mosdns geo2txt" ;;
             custom)
@@ -155,7 +156,13 @@ jobs:
             | sort -u | head -1)
 
           if [ -z "$SDK_FILE" ]; then
-            echo "::error::在 $BASE 下没找到 OpenWrt SDK，请检查平台 / 版本是否正确"
+            echo "::error::在 $BASE 下没找到 OpenWrt SDK"
+            echo "—— 可能原因 ——"
+            echo "1) 平台 target/subtarget 名字不对或该版本没有预编译 SDK"
+            echo "   （旧名 ipq807x 已并入 qualcommax，需用 qualcommax/ipq807x）"
+            echo "2) openwrt_version 填错（25.12.6 / 24.10.5 / snapshot）"
+            echo "—— 该目录实际存在的 SDK ——"
+            curl -sL "$BASE/" | grep -oE 'openwrt-sdk-[^"<]+' | sort -u | head -20 || true
             exit 1
           fi
 
@@ -239,6 +246,9 @@ jobs:
 
             PKGNAME=$(sed -nE 's/^[[:space:]]*PKG_NAME[[:space:]]*[:?+]?=[[:space:]]*//p' \
                         "package/$p/Makefile" | head -1)
+            # 派生式（如 luci-app-eqosplus 的 PKG_NAME:=luci-app-$(THEME_NAME)）
+            # 含 $ 不能当 make target，直接放弃回退
+            case "$PKGNAME" in *'$'*) PKGNAME='' ;; esac
 
             if [ -n "$PKGNAME" ] && [ "$PKGNAME" != "$p" ] \
                && grep -q 'No rule to make target' "$LOG"; then

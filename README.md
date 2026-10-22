@@ -104,7 +104,7 @@ bash update.sh --skip-source  # 只更新版本哈希
 | `luci-app-passwall` | `Openwrt-Passwall/openwrt-passwall` | `luci-app-passwall/` |
 | `luci-app-passwall2` | `Openwrt-Passwall/openwrt-passwall2` | `luci-app-passwall2/` |
 | `passwall-packages` | `Openwrt-Passwall/openwrt-passwall-packages` | 17 个依赖包（**不含 `sing-box`**） |
-| `nikki` | `nikkinikki-org/OpenWrt-nikki` | `luci-app-nikki/` `nikki/` `mihomo-meta/` `mihomo-alpha/` |
+| `nikki` | `nikkinikki-org/OpenWrt-nikki` | `luci-app-nikki/` `nikki/` `mihomo-meta/`（**已停用 `mihomo-alpha`**） |
 | `vikingyfy-packages` | `VIKINGYFY/packages` | `sing-box/` `axonhub/` `gecoosac/` `luci-app-homeproxy/` `luci-app-wolultra/` `luci-app-axonhub/` `luci-app-gecoosac/` |
 | `luci-theme-material3` | `KawaiiHachimi/luci-theme-material3` | **整个仓库** → `luci-theme-material3/`（`as_package` 模式） |
 | `mosdns` | `sbwml/luci-app-mosdns`@**`v5`** | `luci-app-mosdns/` `mosdns/` `geo2txt/` |
@@ -243,7 +243,7 @@ bash update.sh --skip-source  # 只更新版本哈希
 ### 策略 3：`notify` —— 只提醒，不自动改
 
 用于**源码内嵌**（`dns2socks`、`shadowsocksr-libev`）或 **git-commit 型**
-（`simple-obfs` `tcping` `smartdns` `mihomo-meta` `mihomo-alpha` `axonhub`）
+（`simple-obfs` `tcping` `smartdns` `mihomo-meta` `axonhub`）
 以及 **`luci.mk` 型 LuCI 插件/主题**（`luci-app-*` / `luci-theme-*`，无 `PKG_HASH`）。
 `PKG_MIRROR_HASH` 是 OpenWrt 对 git 仓库打包后的镜像哈希，本地无法可靠复现，
 硬写会让构建失败，所以只做提醒。
@@ -343,8 +343,12 @@ export WXPUSHER_TOPIC_IDS="123,456"
 | `ramips/mt7621` | MTK MT7621 (mipsel) |
 | `ramips/mt76x8` | MTK MT76x8 (mipsel) |
 | `ath79/generic` | Atheros AR7xxx (mips) |
-| `ipq807x/generic` | 高通 IPQ807x (aarch64) |
+| `qualcommax/ipq807x` | 高通 IPQ807x (aarch64) |
+| `qualcommax/ipq60xx` | 高通 IPQ60xx (aarch64) |
 | `sunxi/cortexa8` | 全志 H3 |
+
+> ⚠️ 旧名 `ipq807x/generic` 在新 OpenWrt 已废弃（并入 `qualcommax`），
+> snapshot 与 25.12.x 都没有该 target 的 SDK，选它必失败。已改成 `qualcommax/ipq807x`。
 
 ### 选编译哪些插件（`preset`）
 
@@ -353,9 +357,9 @@ export WXPUSHER_TOPIC_IDS="123,456"
 | **`all`** | **全部包（默认）** |
 | `luci-app` | 所有 `luci-app-*` |
 | `theme` | 所有 `luci-theme-*` |
-| `proxy-core` | `xray-core` `sing-box` `hysteria` `shadowsocks-rust` `mihomo-*` `naiveproxy` `chinadns-ng` `mosdns` 等 17 个 |
+| `proxy-core` | `xray-core` `sing-box` `hysteria` `shadowsocks-rust` `mihomo-meta` `naiveproxy` `chinadns-ng` `mosdns` 等 16 个 |
 | `passwall` | passwall 全家桶 19 个（luci-app + 全部依赖） |
-| `nikki` | nikki 全家桶 4 个 |
+| `nikki` | nikki 全家桶 3 个 |
 | `mosdns` | `luci-app-mosdns` `mosdns` `geo2txt` |
 | `custom` | 自己填，用 `packages` 输入 |
 
@@ -369,8 +373,12 @@ luci-app-passwall, xray-core, sing-box
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
-| `openwrt_version` | `25.12.6` | 也可填 `24.10.5` / `snapshot` |
+| `openwrt_version` | `snapshot` | 也可填 `25.12.6` / `24.10.5` |
 | `upload_all` | `false` | 开启则连 `-dbg` / `-dev` 一起上传 |
+
+> `snapshot` 的 SDK 文件名**不带版本号**（`openwrt-sdk-x86-64_gcc-…`），
+> 正式版则带（`openwrt-sdk-25.12.6-x86-64_gcc-…`）。脚本从目录列表正则匹配，
+> 两种写法都能解析。
 
 ### 实现要点
 
@@ -380,6 +388,8 @@ luci-app-passwall, xray-core, sing-box
 * **make target 名回退**：make 的 target 用 build target 名（通常是目录名），
   但少数包 `PKG_NAME` 与目录不一致（如 `xray-core` 目录 vs `PKG_NAME:=Xray-core`）。
   拿到 `No rule to make target` 时自动改用 `PKG_NAME` 重试。
+  遇到**派生式**（如 `luci-app-eqosplus` 的 `PKG_NAME:=luci-app-$(THEME_NAME)`，含 `$`）
+  则跳过回退，避免拿 `luci-app-$(THEME_NAME)` 去当 make target。
 * **feed 去重要处理符号链接**：`./scripts/feeds install -a` 装出来的是**符号链接**，
   早期用 `find -type d` 过滤导致删不掉，同名包会报 "redefining package"。
   现改为不过滤类型，注入前先清掉 `package/feeds/**/<name>`。

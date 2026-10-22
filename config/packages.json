@@ -48,7 +48,8 @@
         "README.zh.md",
         "feed.sh",
         "install.sh",
-        "uninstall.sh"
+        "uninstall.sh",
+        "mihomo-alpha"
       ],
       "target": "."
     },
@@ -591,16 +592,6 @@
       "note": "git-commit 型（PKG_SOURCE_PROTO:=git + PKG_SOURCE_VERSION），跟随上游正式版提醒",
       "repo": "MetaCubeX/mihomo",
       "source": "release",
-      "include_prerelease": false,
-      "tag_prefix": "v"
-    },
-    {
-      "name": "mihomo-alpha",
-      "makefile": "mihomo-alpha/Makefile",
-      "strategy": "notify",
-      "note": "git-commit 型，跟随上游最新 tag（含 alpha）提醒",
-      "repo": "MetaCubeX/mihomo",
-      "source": "tag",
       "include_prerelease": false,
       "tag_prefix": "v"
     },
