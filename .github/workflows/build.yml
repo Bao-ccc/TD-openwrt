@@ -334,6 +334,24 @@ jobs:
 
           cat pkglist.txt
 
+      - name: Install Node.js and pnpm for AxonHub
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -Eq '^(luci-app-axonhub|axonhub)$' pkglist.txt; then
+            echo "检测到 AxonHub，开始安装 Node.js 和 pnpm"
+
+            sudo apt-get update
+            sudo apt-get install -y nodejs npm
+            sudo npm install -g pnpm
+
+            node --version
+            npm --version
+            pnpm --version
+          else
+            echo "未选择 AxonHub，跳过 Node.js 和 pnpm 安装"
+          fi
       # ----------------------------------------------------------------------
       # 7. 注入本地插件到 SDK
       #    sing-box 保留在 feeds/packages/net/sing-box
