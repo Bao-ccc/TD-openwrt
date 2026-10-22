@@ -54,7 +54,7 @@ on:
       exclude_packages:
         description: "排除不编译的插件，空格或逗号分隔"
         type: string
-        default: "luci-app-axonhub axonhub"
+        default: "luci-app-axonhub axonhub shadow-tls"
 
       release_tag:
         description: "GitHub Release 标签，留空则自动生成"
@@ -621,7 +621,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-${{ inputs.platform }}-${{ inputs.openwrt_version }}
+          name: build-logs-${{ replace(inputs.platform, '/', '-') }}-${{ inputs.openwrt_version }}
           path: build-logs/
           if-no-files-found: ignore
           retention-days: 7
