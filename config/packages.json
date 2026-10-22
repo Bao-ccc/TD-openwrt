@@ -48,7 +48,6 @@
         "README.zh.md",
         "feed.sh",
         "install.sh",
-        "mihomo-alpha",
         "uninstall.sh"
       ],
       "target": "."
@@ -78,6 +77,36 @@
         ".github",
         "Readme.md",
         "imgs"
+      ]
+    },
+    {
+      "name": "mosdns",
+      "repo": "sbwml/luci-app-mosdns",
+      "ref": "v5",
+      "dirs": [
+        "*"
+      ],
+      "exclude": [
+        ".github",
+        "LICENSE",
+        "README.md",
+        "install.sh"
+      ],
+      "target": "."
+    },
+    {
+      "name": "luci-app-eqosplus",
+      "repo": "sirpdboy/luci-app-eqosplus",
+      "ref": "main",
+      "as_package": true,
+      "target": "luci-app-eqosplus",
+      "exclude": [
+        ".github",
+        "LICENSE",
+        "README.md",
+        "README_CN.md",
+        "doc",
+        "界面.png"
       ]
     }
   ],
@@ -566,6 +595,16 @@
       "tag_prefix": "v"
     },
     {
+      "name": "mihomo-alpha",
+      "makefile": "mihomo-alpha/Makefile",
+      "strategy": "notify",
+      "note": "git-commit 型，跟随上游最新 tag（含 alpha）提醒",
+      "repo": "MetaCubeX/mihomo",
+      "source": "tag",
+      "include_prerelease": false,
+      "tag_prefix": "v"
+    },
+    {
       "name": "axonhub",
       "makefile": "axonhub/Makefile",
       "strategy": "notify",
@@ -615,6 +654,44 @@
       "makefile": "luci-theme-material3/Makefile",
       "strategy": "notify",
       "note": "luci.mk 主题（无 PKG_VERSION/PKG_HASH），由 luci-theme-material3 源码同步维护"
+    },
+    {
+      "name": "mosdns",
+      "repo": "IrineSistiana/mosdns",
+      "makefile": "mosdns/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "v",
+      "source_url": "https://codeload.github.com/IrineSistiana/mosdns/tar.gz/v${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "geo2txt",
+      "repo": "sbwml/geo2txt",
+      "makefile": "geo2txt/Makefile",
+      "strategy": "tarball",
+      "source": "release",
+      "include_prerelease": false,
+      "tag_prefix": "",
+      "source_url": "https://codeload.github.com/sbwml/geo2txt/tar.gz/${VERSION}?",
+      "reset_release_on_change": false
+    },
+    {
+      "name": "luci-app-mosdns",
+      "makefile": "luci-app-mosdns/Makefile",
+      "strategy": "notify",
+      "repo": "sbwml/luci-app-mosdns",
+      "source": "tag",
+      "include_prerelease": false,
+      "tag_prefix": "v",
+      "note": "luci.mk 型（无源码下载），由 mosdns 源码同步维护"
+    },
+    {
+      "name": "luci-app-eqosplus",
+      "makefile": "luci-app-eqosplus/Makefile",
+      "strategy": "notify",
+      "note": "luci.mk 型（PKG_NAME 由 $(THEME_NAME) 派生、无源码下载），由 luci-app-eqosplus 源码同步维护"
     }
   ]
 }

@@ -17,7 +17,8 @@
 
 ## 目录布局
 
-**插件包 / 软件包目录直接放在仓库根目录**，不嵌套二级目录：
+**插件包 / 软件包目录直接放在仓库根目录**，不嵌套二级目录
+（与 [`VIKINGYFY/packages`](https://github.com/VIKINGYFY/packages) 同布局）：
 
 ```
 your-repo/                        ← 仓库根目录 = 一个 OpenWrt package feed
@@ -31,16 +32,54 @@ your-repo/                        ← 仓库根目录 = 一个 OpenWrt package f
 └── .state/                       # 运行状态（已 .gitignore）
 ```
 
-OpenWrt 直接拉取，不用再套一层：
-
-```bash
-src-link passwall /path/to/repo           # 或
-git clone <repo> <openwrt>/package/passwall
-```
+OpenWrt 直接拉取：见下文 **「📦 拉库」** 一节（本仓库：`https://github.com/xiaojing110/package`）。
 
 ---
 
-## 快速开始
+## 📦 拉库 —— 在 OpenWrt 中使用本仓库
+
+**本仓库地址：`https://github.com/xiaojing110/package`**
+
+### 方式一：当 feed 拉取（推荐）
+
+编辑 OpenWrt 源码树根目录的 `feeds.conf.default`（或 `feeds.conf`），加一行：
+
+```
+src-git package https://github.com/xiaojing110/package
+```
+
+然后：
+
+```bash
+cd <openwrt>
+./scripts/feeds update -a
+./scripts/feeds install -a
+make menuconfig        # LuCI -> Applications / Themes 里勾选需要的包
+make -j$(nproc)
+```
+
+### 方式二：只拉某几个包
+
+```bash
+cd <openwrt>/package
+git clone --depth=1 https://github.com/xiaojing110/package xiaojing110
+cp -a xiaojing110/luci-app-passwall xiaojing110/xray-core .
+# 或者全部：cp -a xiaojing110/* .
+```
+
+### 方式三：src-link（本地已克隆本仓库时）
+
+```
+src-link package /path/to/xiaojing110/package
+```
+
+> 布局是扁平的（包目录直接在仓库根），所以拉下来就是现成的 feed，
+> 不需要再往里套一层 `packages/`。工具自身的 `update.sh` `config/` `lib/`
+> `test/` 没有 `Makefile`，OpenWrt 会自动忽略。
+
+---
+
+## 快速开始（维护本仓库时）
 
 ```bash
 # 依赖
@@ -68,6 +107,8 @@ bash update.sh --skip-source  # 只更新版本哈希
 | `nikki` | `nikkinikki-org/OpenWrt-nikki` | `luci-app-nikki/` `nikki/` `mihomo-meta/` `mihomo-alpha/` |
 | `vikingyfy-packages` | `VIKINGYFY/packages` | `sing-box/` `axonhub/` `gecoosac/` `luci-app-homeproxy/` `luci-app-wolultra/` `luci-app-axonhub/` `luci-app-gecoosac/` |
 | `luci-theme-material3` | `KawaiiHachimi/luci-theme-material3` | **整个仓库** → `luci-theme-material3/`（`as_package` 模式） |
+| `mosdns` | `sbwml/luci-app-mosdns`@**`v5`** | `luci-app-mosdns/` `mosdns/` `geo2txt/` |
+| `luci-app-eqosplus` | `sirpdboy/luci-app-eqosplus` | **整个仓库** → `luci-app-eqosplus/`（`as_package` 模式） |
 
 > **`sing-box` 取自 `VIKINGYFY/packages`**（`passwall-packages` 的 `sing-box` 已加进 `exclude`）。
 > VIKINGYFY 的版本用 `PKG_UPSTREAM_VERSION` 承载（`PKG_VERSION` 由 `$(subst)` 派生），
@@ -75,8 +116,8 @@ bash update.sh --skip-source  # 只更新版本哈希
 
 ```json
 {
-  "name": "xiaojing110-package",
-  "repo": "xiaojing110/package",
+  "name": "vikingyfy-packages",
+  "repo": "VIKINGYFY/packages",
   "ref": "main",
   "dirs": ["*"],
   "exclude": [".github", ".gitattributes", "LICENSE", "README.md"],
@@ -156,8 +197,11 @@ bash update.sh --skip-source  # 只更新版本哈希
 > ⚠️ `version_var` 指到的变量**只改第一处赋值**，后续的
 > `PKG_VERSION:=$(subst …)` 这类派生式不会被碰。
 
-**已配置（11 个）**：`xray-core` `xray-plugin` `v2ray-plugin` `sing-box` `hysteria`
-`geoview` `shadow-tls` `shadowsocks-rust` `ipt2socks` `microsocks`（+ 见下）
+**已配置（12 个）**：`xray-core` `xray-plugin` `v2ray-plugin` `sing-box` `hysteria`
+`geoview` `shadow-tls` `shadowsocks-rust` `ipt2socks` `microsocks` `mosdns` `geo2txt`
+
+> `mosdns` ← `IrineSistiana/mosdns`；`geo2txt` ← `sbwml/geo2txt`（注意它无 `v` 前缀，
+> `tag_prefix: ""`）。
 
 ### 策略 2：`assets` —— 多架构预编译 / geodata
 
@@ -199,7 +243,8 @@ bash update.sh --skip-source  # 只更新版本哈希
 ### 策略 3：`notify` —— 只提醒，不自动改
 
 用于**源码内嵌**（`dns2socks`、`shadowsocksr-libev`）或 **git-commit 型**
-（`simple-obfs` `tcping` `smartdns` `mihomo-meta` `mihomo-alpha` `axonhub`）。
+（`simple-obfs` `tcping` `smartdns` `mihomo-meta` `mihomo-alpha` `axonhub`）
+以及 **`luci.mk` 型 LuCI 插件/主题**（`luci-app-*` / `luci-theme-*`，无 `PKG_HASH`）。
 `PKG_MIRROR_HASH` 是 OpenWrt 对 git 仓库打包后的镜像哈希，本地无法可靠复现，
 硬写会让构建失败，所以只做提醒。
 
@@ -305,12 +350,13 @@ export WXPUSHER_TOPIC_IDS="123,456"
 
 | preset | 内容 |
 |---|---|
-| **`all`** | **全部 31 个包（默认）** |
+| **`all`** | **全部包（默认）** |
 | `luci-app` | 所有 `luci-app-*` |
 | `theme` | 所有 `luci-theme-*` |
-| `proxy-core` | `xray-core` `sing-box` `hysteria` `shadowsocks-rust` `mihomo-*` `naiveproxy` `chinadns-ng` 等 15 个 |
+| `proxy-core` | `xray-core` `sing-box` `hysteria` `shadowsocks-rust` `mihomo-*` `naiveproxy` `chinadns-ng` `mosdns` 等 17 个 |
 | `passwall` | passwall 全家桶 19 个（luci-app + 全部依赖） |
 | `nikki` | nikki 全家桶 4 个 |
+| `mosdns` | `luci-app-mosdns` `mosdns` `geo2txt` |
 | `custom` | 自己填，用 `packages` 输入 |
 
 `custom` 时在 `packages` 里填包名，**空格或逗号分隔**，例如：
@@ -331,11 +377,16 @@ luci-app-passwall, xray-core, sing-box
 * **SDK 文件名动态解析**：`openwrt-sdk-<ver>-<target>-<subtarget>_gcc-<gcc>_musl.Linux-x86_64.tar.zst`
   里的 GCC 版本会随 OpenWrt 版本变（25.12 是 `gcc-14.3.0`，24.10 是 `gcc-13.3.0`），
   硬编码必失效。改为**拉目录列表正则匹配**，任何版本/平台都能解析。
+* **make target 名回退**：make 的 target 用 build target 名（通常是目录名），
+  但少数包 `PKG_NAME` 与目录不一致（如 `xray-core` 目录 vs `PKG_NAME:=Xray-core`）。
+  拿到 `No rule to make target` 时自动改用 `PKG_NAME` 重试。
+* **feed 去重要处理符号链接**：`./scripts/feeds install -a` 装出来的是**符号链接**，
+  早期用 `find -type d` 过滤导致删不掉，同名包会报 "redefining package"。
+  现改为不过滤类型，注入前先清掉 `package/feeds/**/<name>`。
 * **`.ipk` / `.apk` 都收**：OpenWrt 25.x 换成 `apk` 包管理，24.x 及以前是 `ipk`。
-* **包名冲突处理**：官方 `packages` feed 里可能有同名包（如 `microsocks`），
-  注入前先删掉 `package/feeds/**/<name>`，保证用的是本仓库版本。
 * **单包失败不拖垮整个 job**：逐包编译，失败的记进 `build-result.txt` 并在
-  Summary 里列出，产物与日志仍会上传。
+  Summary 里列出，产物与日志仍会上传；全部失败则 job 标红。
+* **失败早退**：包列表解析放在下载 SDK **之前**，填错包名不会浪费十分钟。
 * **产物**：
   * `packages` —— 编译出的 `.ipk`/`.apk`
   * `build-logs` —— 每个包一份完整 `V=s` 编译日志（失败时排查用）
