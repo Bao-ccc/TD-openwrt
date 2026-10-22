@@ -97,13 +97,10 @@ jobs:
           SUBTARGET="${PLATFORM##*/}"
 
           if [ "$OWT_VER" = "snapshot" ]; then
-            # 最新 master 分支 SDK
             BASE="https://downloads.openwrt.org/snapshots/targets/${TARGET}/${SUBTARGET}"
           else
             BASE="https://downloads.openwrt.org/releases/${OWT_VER}/targets/${TARGET}/${SUBTARGET}"
           fi
-
-          echo "→ 目标目录: $BASE"
 
           # SDK 文件名包含 GCC 版本，必须从目录列表动态解析
           SDK_FILE=$(curl -sL --fail --retry 3 "$BASE/" \
