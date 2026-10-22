@@ -164,19 +164,18 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-          #echo "→ 替换 golang 为 packages 仓库最新版本"
-          #rm -rf feeds/packages/lang/golang
-          #git clone --depth 1 https://github.com/openwrt/packages.git /tmp/owrt-packages
-          #cp -a /tmp/owrt-packages/lang/golang feeds/packages/lang/golang
-          #rm -rf /tmp/owrt-packages
+          echo "→ 替换 sing-box 为 packages 仓库最新版本"
+          rm -rf feeds/packages/net/sing-box
+          git clone --depth 1 https://github.com/xiaojing110/package.git /tmp/owrt-packages
+          cp -a /tmp/owrt-packages/sing-box feeds/packages/net/sing-box
+          rm -rf /tmp/owrt-packages
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-          #./scripts/feeds update -a
-          #./scripts/feeds install -a
-
-          echo "→ 当前 golang 版本信息:"
+          echo "→ 当前 sing-box 版本信息:"
           grep -E 'GO_DEFAULT_VERSION|GO_VERSION_MAJOR_MINOR|GO_VERSION_PATCH' \
-            feeds/packages/lang/golang/golang-values.mk \
-            feeds/packages/lang/golang/golang1.27/Makefile 2>/dev/null || true
+            feeds/packages/net/sing-box/Makefile.mk \
+            packages/net/sing-box/Makefile 2>/dev/null || true
 
       # ----------------------------------------------------------------------
       # 6. 根据 preset 解析最终编译包列表
