@@ -163,6 +163,9 @@ bash update.sh --skip-source  # 只更新版本哈希
 
 ### 策略 1：`tarball` —— 源码包（最常见）
 
+> `source: "release"` 时若取不到 Release，**自动回退到 tag**。
+> `XTLS/Xray-core` 这类只打 tag 的仓库必须靠回退。
+
 ```json
 {
   "name": "sing-box",
@@ -278,6 +281,21 @@ bash update.sh --skip-source  # 只更新版本哈希
 
 点分段逐段数字比较（`26.10.21 > 26.9.15`，`1.14.3 > 1.9.9`）；
 遇到非数字段退化为字符串比较。
+
+---
+
+## 🛡️ 容错（CI 里很重要）
+
+* **Release 拿不到就回退到 tag**：有些仓库**只打 tag 不发 GitHub Release**
+  （如 `XTLS/Xray-core`，`/releases` 返回空数组）。以前这会让包失败；
+  现在 `source: "release"` 会先取 Release，取不到自动回退 `/tags`。
+  实测 `xray-core` `hysteria` `geoview` `shadow-tls` `shadowsocks-rust` `naiveproxy`
+  六个仓库都靠回退才能解析。
+* **单包失败不拖垮整次同步**：拿不到版本、下载失败、Makefile 缺失都只告警并跳过，
+  其余包照常更新、照常 commit。需要硬失败（比如在 release 流水线里）加 `--strict`。
+* **`version_regex` 未命中就跳过**：不把错误版本写进状态或推送
+  （如 `gecoosac` 的 `^gecoosac-(.+)$` 碰上 `apk-packages-arm64`）。
+* **`git push` 重试 3 次**：同步期间上游可能有新提交，先 `pull --rebase` 再推。
 
 ---
 

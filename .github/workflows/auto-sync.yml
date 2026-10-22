@@ -1,9 +1,9 @@
 name: Auto Sync
 
 on:
-  # 定时同步：每 1 小时一次（可自行调整）
+  # 定时同步：每 6 小时一次（可自行调整）
   schedule:
-    - cron: "15 */1 * * *"
+    - cron: "15 */6 * * *"
 
   # 手动触发
   workflow_dispatch:
@@ -66,15 +66,20 @@ jobs:
           WXPUSHER_UIDS: ${{ secrets.WXPUSHER_UIDS }}
           WXPUSHER_TOPIC_IDS: ${{ secrets.WXPUSHER_TOPIC_IDS }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           ARGS=()
           if [ "${{ inputs.force }}" = "true" ]; then ARGS+=(--force); fi
           if [ -n "${{ inputs.only }}" ]; then ARGS+=(--only "${{ inputs.only }}"); fi
-          bash ./update.sh "${ARGS[@]}"
+          # 空数组 + set -u 在老 bash 会炸，用 ${ARGS[@]+…} 保护
+          bash ./update.sh ${ARGS[@]+"${ARGS[@]}"}
+          rc=$?
+          echo "update.sh 退出码: $rc"
+          exit $rc
 
       - name: Detect changes
         id: changes
         run: |
+          set -uo pipefail
           if [ -n "$(git status --porcelain)" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "存在变更："
@@ -87,12 +92,18 @@ jobs:
       - name: Commit and push
         if: steps.changes.outputs.changed == 'true' && (inputs.mode == '' || inputs.mode == 'commit')
         run: |
-          set -euo pipefail
+          set -uo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "chore(sync): sync upstream sources & package hashes [skip ci]"
-          git push
+          # 同步期间上游可能有新提交，先 rebase 再推，避免 non-fast-forward 直接挂掉
+          git commit -m "chore(sync): sync upstream sources & package hashes [skip ci]" || exit 0
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            echo "push 失败，重试 $i …"; sleep 5
+          done
+          echo "::error::git push 重试 3 次仍失败"
+          exit 1
 
       - name: Create Pull Request
         if: steps.changes.outputs.changed == 'true' && inputs.mode == 'pr'

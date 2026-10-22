@@ -41,6 +41,7 @@ FORCE=false
 ONLY=""
 SKIP_SOURCE=false
 SKIP_PACKAGES=false
+STRICT=false
 
 usage() {
   cat <<'USAGE'
@@ -54,6 +55,7 @@ usage() {
       --skip-source     跳过上游源码同步
       --skip-packages   跳过版本/哈希更新
       --sync-source     只做上游源码同步（= --skip-packages）
+      --strict          有包失败就以非 0 退出（默认只告警，不影响整次同步）
   -h, --help            显示本帮助
 
 配置文件格式见 config/packages.json 与 README.md。
@@ -69,6 +71,7 @@ while [[ $# -gt 0 ]]; do
     --skip-source)      SKIP_SOURCE=true; shift ;;
     --skip-packages)    SKIP_PACKAGES=true; shift ;;
     --sync-source)      SKIP_PACKAGES=true; shift ;;
+    --strict)           STRICT=true; shift ;;
     -h|--help)          usage; exit 0 ;;
     *) echo "[错误] 未知参数: $1" >&2; usage; exit 2 ;;
   esac
@@ -607,7 +610,12 @@ strategy_tarball() {
   [[ -f "$makefile" ]] || { log "[失败] 找不到 Makefile: ${makefile}"; return 1; }
 
   local tag
-  if ! tag=$(fetch_latest_tag "$repo" "$source" "$include_pre"); then return 1; fi
+  if ! tag=$(fetch_latest_tag "$repo" "$source" "$include_pre"); then
+    # 拿不到版本信息不视为致命错误，否则一个仓库挂了会拖掉整次同步
+    log "[warn] ${name}: ${repo} 无可跟踪版本，跳过"
+    LAST_ACTION="skipped"
+    return 0
+  fi
 
   local raw_ver release
   raw_ver=$(derive_version "$tag" "$tag_prefix" "$version_regex")
@@ -718,7 +726,11 @@ strategy_assets() {
     vprefix=$(cfg_get "$cfg" ".packages[$idx].version.tag_prefix" "")
     vregex=$(cfg_get "$cfg" ".packages[$idx].version.version_regex" "")
     local vraw
-    if ! vtag=$(fetch_latest_tag "$vrepo" "$vsource" "$vpre"); then return 1; fi
+    if ! vtag=$(fetch_latest_tag "$vrepo" "$vsource" "$vpre"); then
+      log "[warn] ${name}: ${vrepo} 无可跟踪版本，跳过"
+      LAST_ACTION="skipped"
+      return 0
+    fi
     vraw=$(derive_version "$vtag" "$vprefix" "$vregex")
     pkg_ver="${vraw%%$'\t'*}"
     pkg_rel="${vraw#*$'\t'}"
@@ -772,7 +784,7 @@ strategy_assets() {
       a_prefix=$(cfg_get "$cfg" "$p.version.tag_prefix" "")
       a_regex=$(cfg_get "$cfg" "$p.version.version_regex" "")
       if ! a_tag=$(fetch_latest_tag "$a_repo" "$a_src" "$a_pre"); then
-        log "[失败] ${name}/${aid}: 无法获取 ${a_repo} 版本"
+        log "[warn] ${name}/${aid}: 无可跟踪版本，跳过该资源"
         continue
       fi
       local a_raw
@@ -904,7 +916,7 @@ strategy_notify() {
 
   local tag
   if ! tag=$(fetch_latest_tag "$repo" "$source" "$include_pre"); then
-    log "[notify] ${name}: ${repo} 无可跟踪的 ${source}，跳过"
+    log "[warn] ${name}: ${repo} 无可跟踪的 ${source}，跳过"
     LAST_ACTION="skipped"
     return 0
   fi
@@ -912,6 +924,14 @@ strategy_notify() {
   local raw_ver version
   raw_ver=$(derive_version "$tag" "$tag_prefix" "$version_regex")
   version="${raw_ver%%$'\t'*}"
+
+  # 设了 version_regex 却没命中（如 gecoosac 的 ^gecoosac-(.+)$ 碰上 apk-packages-arm64）
+  # 不要把错误版本写进状态/推送
+  if [[ -n "$version_regex" && -z "$version" ]]; then
+    log "[warn] ${name}: tag ${tag} 不匹配 version_regex ${version_regex}，跳过"
+    LAST_ACTION="skipped"
+    return 0
+  fi
 
   local cur=""
   [[ -f "$makefile" ]] && cur=$(read_var_line "$makefile" "PKG_VERSION")
@@ -963,41 +983,42 @@ EOF
 
 # ---------- 通用：取最新 tag ----------
 # fetch_latest_tag <repo> <source:release|tag> <include_prerelease>
+#   source=release 时先取 Release；取不到（部分仓库只打 tag 不发 Release，
+#   如 XTLS/Xray-core）则回退到 tags。两者都空才返回 1。
+gh_releases() {
+  local repo="$1" include_pre="$2" raw filter
+  raw=$(gh_api "https://api.github.com/repos/${repo}/releases?per_page=30") || return 1
+  [[ "$(printf '%s' "$raw" | jq -r 'type' 2>/dev/null)" == "array" ]] || return 1
+  filter='map(select(.draft != true))'
+  if [[ "$include_pre" != "true" ]]; then
+    filter+=' | map(select(.prerelease != true))'
+  fi
+  printf '%s' "$raw" | jq -r "${filter} | .[0].tag_name // empty"
+}
+
+gh_tags() {
+  local repo="$1" raw
+  raw=$(gh_api "https://api.github.com/repos/${repo}/tags?per_page=30") || return 1
+  [[ "$(printf '%s' "$raw" | jq -r 'type' 2>/dev/null)" == "array" ]] || return 1
+  printf '%s' "$raw" | jq -r '.[0].name // empty'
+}
+
 fetch_latest_tag() {
-  local repo="$1" source="$2" include_pre="$3"
-  local api_url
-  case "$source" in
-    tag|tags) api_url="https://api.github.com/repos/${repo}/tags?per_page=30" ;;
-    *)        api_url="https://api.github.com/repos/${repo}/releases?per_page=30" ;;
-  esac
+  local repo="$1" source="$2" include_pre="$3" tag=""
 
-  local raw
-  if ! raw=$(gh_api "$api_url"); then
-    log "[失败] 获取 ${repo} 的 ${source} 列表失败"
-    return 1
-  fi
-
-  if [[ "$(printf '%s' "$raw" | jq -r 'type' 2>/dev/null)" != "array" ]]; then
-    log "[失败] GitHub API 返回错误: $(printf '%s' "$raw" | jq -r '.message // "未知错误"' 2>/dev/null)"
-    return 1
-  fi
-
-  local tag
   case "$source" in
     tag|tags)
-      tag=$(printf '%s' "$raw" | jq -r '.[0].name // empty')
+      tag=$(gh_tags "$repo")
       ;;
     *)
-      local filter='map(select(.draft != true))'
-      if [[ "$include_pre" != "true" ]]; then
-        filter+=' | map(select(.prerelease != true))'
-      fi
-      tag=$(printf '%s' "$raw" | jq -r "${filter} | .[0].tag_name // empty")
+      tag=$(gh_releases "$repo" "$include_pre")
+      # 回退：有些仓库只打 tag 不发 Release
+      if [[ -z "$tag" ]]; then tag=$(gh_tags "$repo"); fi
       ;;
   esac
 
   if [[ -z "$tag" || "$tag" == "null" ]]; then
-    log "${repo} 没有符合条件的 release/tag"
+    log "[warn] ${repo} 没有可跟踪的 ${source}/tag"
     return 1
   fi
   printf '%s' "$tag"
@@ -1054,7 +1075,13 @@ run_packages() {
   done
 
   log "[包] 汇总: 更新 ${updated} / 跳过 ${skipped} / 失败 ${failed}"
-  [[ "$failed" -gt 0 ]] && return 1
+  if [[ "$failed" -gt 0 ]]; then
+    if [[ "$STRICT" == "true" ]]; then
+      log "[strict] 有 ${failed} 个包失败，按 --strict 退出非 0"
+      return 1
+    fi
+    log "[warn] 有 ${failed} 个包失败（非致命，已跳过；需要硬失败请加 --strict）"
+  fi
   return 0
 }
 
