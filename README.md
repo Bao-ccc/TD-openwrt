@@ -429,9 +429,14 @@ luci-app-passwall, xray-core, sing-box
   拿到 `No rule to make target` 时自动改用 `PKG_NAME` 重试。
   遇到**派生式**（如 `luci-app-eqosplus` 的 `PKG_NAME:=luci-app-$(THEME_NAME)`，含 `$`）
   则跳过回退，避免拿 `luci-app-$(THEME_NAME)` 去当 make target。
-* **feed 去重要处理符号链接**：`./scripts/feeds install -a` 装出来的是**符号链接**，
+* **feed 去重要清两层**：`./scripts/feeds install -a` 装出来的是**符号链接**，
   早期用 `find -type d` 过滤导致删不掉，同名包会报 "redefining package"。
-  现改为不过滤类型，注入前先清掉 `package/feeds/**/<name>`。
+  现在两层都清，保证**一律用本仓库的版本**：
+  1. `package/feeds/<feed>/<name>` —— feeds 装出来的符号链接
+  2. `feeds/<feed>/<cat>/<name>` —— **feed 源目录本身**
+     （如 `feeds/packages/net/sing-box`，不删的话 make 仍会扫到 OpenWrt 自带的那份）
+* **sing-box 专项检查**：注入后会打印 `feeds/packages/net/sing-box` 是否已删、
+  扫描路径里是否只剩本仓库那份，并对**每个**注入的包做唯一性校验。
 * **`.ipk` / `.apk` 都收**：OpenWrt 25.x 换成 `apk` 包管理，24.x 及以前是 `ipk`。
 * **单包失败不拖垮整个 job**：逐包编译，失败的记进 `build-result.txt` 并在
   Summary 里列出，产物与日志仍会上传；全部失败则 job 标红。

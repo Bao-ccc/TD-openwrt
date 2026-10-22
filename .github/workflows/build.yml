@@ -276,16 +276,55 @@ jobs:
         run: |
           set -euo pipefail
           cd sdk
+
+          # 清掉 feed 里的同名包，保证用的是**本仓库**的版本
+          #   两层都要清，否则 make 仍会扫到 feed 那份，报 "redefining package" 或直接用错：
+          #   1) package/feeds/<feed>/<name>  —— feeds install 装出来的**符号链接**
+          #      （注意是链接，不能用 -type d 过滤，否则删不掉）
+          #   2) feeds/<feed>/<cat>/<name>   —— feed 源目录本身
+          #      （如 feeds/packages/net/sing-box，必须删掉才能真正切到本仓库的 sing-box）
+          purge_feed_pkg() {
+            local n="$1"
+            find package/feeds -name "$n" -exec rm -rf {} + 2>/dev/null || true
+            find feeds -mindepth 2 -maxdepth 4 -name "$n" -exec rm -rf {} + 2>/dev/null || true
+          }
+
           for p in $(cat ../pkglist.txt); do
-            # 同名 feed 包会让 make 报 "redefining package"，
-            # 注意 feed 包是**符号链接**，不能用 -type d 过滤（否则删不掉）
-            find package/feeds -name "$p" -exec rm -rf {} + 2>/dev/null || true
+            purge_feed_pkg "$p"
             rm -rf "package/$p"
             cp -a "../$p" "package/$p"
-            echo "→ package/$p"
+            echo "→ package/$p  （已清掉 feed 同名包）"
           done
+
+          echo ""
+          echo "→ 专项检查：OpenWrt 自带的 sing-box 是否已清干净"
+          if [ -e feeds/packages/net/sing-box ]; then
+            echo "  ❌ feeds/packages/net/sing-box 仍存在"
+          else
+            echo "  ✅ feeds/packages/net/sing-box 已删除"
+          fi
+          LEFT=$(find package/feeds feeds -name 'sing-box' 2>/dev/null | sort || true)
+          if [ -n "$LEFT" ]; then
+            echo "  ❌ 仍有残留："; echo "$LEFT" | sed 's/^/     /'
+          else
+            echo "  ✅ 扫描路径里只剩本仓库的 sing-box"
+          fi
+          ls -ld package/sing-box 2>/dev/null | sed 's/^/  本仓库 → /'
+
+          echo ""
+          echo "→ 通用校验：注入的每个包只应存在一份"
+          for p in $(cat ../pkglist.txt); do
+            N=$(find package feeds -name "$p" 2>/dev/null | wc -l)
+            if [ "$N" -gt 1 ]; then
+              echo "  ⚠️ $p 发现 $N 份："
+              find package feeds -name "$p" 2>/dev/null | sed 's/^/     /'
+            fi
+          done
+          echo "  （无 ⚠️ 即全部唯一）"
+
+          echo ""
           echo "→ package/ 下已注入:"
-          find package -maxdepth 1 -mindepth 1 -type d | sort
+          find package -maxdepth 1 -mindepth 1 -type d | sort | sed 's/^/  /'
 
       - name: Build
         run: |
