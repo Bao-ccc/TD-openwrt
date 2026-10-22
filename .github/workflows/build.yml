@@ -169,8 +169,6 @@ jobs:
           git clone --depth 1 https://github.com/xiaojing110/package.git /tmp/owrt-packages
           cp -a /tmp/owrt-packages/sing-box feeds/packages/net/sing-box
           rm -rf /tmp/owrt-packages
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
 
           echo "→ 当前 sing-box 版本信息:"
           grep -E 'GO_DEFAULT_VERSION|GO_VERSION_MAJOR_MINOR|GO_VERSION_PATCH' \
