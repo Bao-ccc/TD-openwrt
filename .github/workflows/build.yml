@@ -269,25 +269,25 @@ jobs:
       # ----------------------------------------------------------------------
       # 7.5 修复行尾符（避免 patch 因 CRLF/LF 不一致失败）
       # ----------------------------------------------------------------------
-      #- name: Fix line endings
-        #run: |
-         # set -euo pipefail
+      - name: Fix line endings
+        run: |
+          set -euo pipefail
 
           # 安装 dos2unix（如果还没有）
-          #sudo apt-get install -y -qq dos2unix
+          sudo apt-get install -y -qq dos2unix
 
-          #echo "→ 统一转换包内所有 .patch 为 LF"
-          #find . -path './sdk' -prune -o -name '*.patch' -type f -print0 \
-          #  | xargs -0 -r dos2unix -q
+          echo "→ 统一转换包内所有 .patch 为 LF"
+          find . -path './sdk' -prune -o -name '*.patch' -type f -print0 \
+            | xargs -0 -r dos2unix -q
 
           # 特别处理 axonhub 这个已知会出问题的包
-          #if [ -d axonhub ]; then
-           # echo "→ 修复 axonhub 补丁与可能的源文件行尾"
-            #find axonhub -type f \( -name '*.patch' -o -name '*.tsx' -o -name '*.ts' -o -name '*.go' -o -name '*.yml' \) \
-             # -exec dos2unix -q {} +
-          #fi
+          if [ -d axonhub ]; then
+            echo "→ 修复 axonhub 补丁与可能的源文件行尾"
+            find axonhub -type f \( -name '*.patch' -o -name '*.tsx' -o -name '*.ts' -o -name '*.go' -o -name '*.yml' \) \
+              -exec dos2unix -q {} +
+          fi
 
-          #echo "→ 行尾修复完成"
+          echo "→ 行尾修复完成"
       # ----------------------------------------------------------------------
       # 8. 逐包编译
       # ----------------------------------------------------------------------
