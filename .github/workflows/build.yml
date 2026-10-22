@@ -1,8 +1,7 @@
-````yaml
 # =============================================================================
 # OpenWrt 插件/包编译工作流
 # 默认：x86/64 + 最新 snapshot SDK
-# 插件编译完成后发布到 xiaojing110/package 的 GitHub Releases
+# 编译产物自动发布到当前仓库 GitHub Releases
 # =============================================================================
 
 name: Build Packages
@@ -63,7 +62,7 @@ on:
         default: ""
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -98,7 +97,7 @@ jobs:
             build-essential clang flex bison g++ gawk \
             gcc-multilib g++-multilib gettext git \
             libncurses-dev libssl-dev python3 rsync unzip \
-            zlib1g-dev file wget zstd curl jq gh
+            zlib1g-dev file wget zstd curl jq gh dos2unix
 
       # ----------------------------------------------------------------------
       # 3. 解析目标平台并获取 SDK 地址
@@ -176,11 +175,11 @@ jobs:
               ;;
           esac
 
-          echo "SDK 根目录："
+          echo "SDK 根目录:"
           ls sdk | head -20
 
       # ----------------------------------------------------------------------
-      # 5. 更新 feeds，并替换为仓库最新 sing-box
+      # 5. 更新 feeds，并替换为当前仓库最新 sing-box
       # ----------------------------------------------------------------------
       - name: Update feeds and refresh sing-box
         run: |
@@ -192,45 +191,22 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-          echo "获取 xiaojing110/package 最新 sing-box"
+          echo "检查仓库 sing-box"
 
-          TMP_REPO="$(mktemp -d)"
-
-          cleanup() {
-            rm -rf "$TMP_REPO"
-          }
-
-          trap cleanup EXIT
-
-          git clone \
-            --depth 1 \
-            https://github.com/xiaojing110/package.git \
-            "$TMP_REPO/package"
-
-          if [ ! -d "$TMP_REPO/package/sing-box" ]; then
-            echo "::error::仓库中不存在 sing-box 目录"
+          if [ ! -d ../sing-box ] || [ ! -f ../sing-box/Makefile ]; then
+            echo "::error::仓库根目录下没有 sing-box/Makefile，无法替换"
             exit 1
           fi
 
-          if [ ! -f "$TMP_REPO/package/sing-box/Makefile" ]; then
-            echo "::error::sing-box/Makefile 不存在"
-            exit 1
-          fi
-
-          # 移除旧 feeds 版本，防止出现重复包定义
+          # 删除 SDK 中的旧 feed 版本
           rm -rf feeds/packages/net/sing-box
 
           mkdir -p feeds/packages/net
 
-          # 使用刚获取的仓库最新版本
-          cp -a \
-            "$TMP_REPO/package/sing-box" \
-            feeds/packages/net/sing-box
+          # 使用当前仓库中的 sing-box
+          cp -a ../sing-box feeds/packages/net/sing-box
 
-          echo "sing-box 来源："
-          git -C "$TMP_REPO/package" log -1 --format='%h %cs %s'
-
-          echo "sing-box Makefile："
+          echo "sing-box Makefile:"
           sed -n '1,100p' feeds/packages/net/sing-box/Makefile
 
           echo "sing-box 替换完成"
@@ -251,7 +227,7 @@ jobs:
             | sort -u \
             | tr '\n' ' ')
 
-          echo "仓库内全部包："
+          echo "仓库内全部包:"
           echo "$ALL"
 
           case "$PRESET" in
@@ -300,18 +276,18 @@ jobs:
               ;;
           esac
 
-          # 去重、校验包目录
+          # 去重、检查包是否存在
           RES=""
 
           for p in $LIST; do
             [ -z "$p" ] && continue
 
-            # sing-box 使用步骤 5 获取的最新 feed 包
+            # sing-box 使用刚刚替换的 feed 包
             if [ "$p" = "sing-box" ] \
-              && [ -f "sdk/feeds/packages/net/sing-box/Makefile" ]; then
+              && [ -f sdk/feeds/packages/net/sing-box/Makefile ]; then
               :
             elif [ ! -d "$p" ] || [ ! -f "$p/Makefile" ]; then
-              echo "::warning::跳过不存在的仓库包: $p"
+              echo "::warning::跳过不存在的包: $p"
               continue
             fi
 
@@ -324,10 +300,8 @@ jobs:
             RES="${RES} ${p}"
           done
 
-          # 排除指定插件
-          EXCLUDE_NORMALIZED=$(printf '%s' "$EXCLUDE_PKGS" \
-            | tr ',' ' ')
-
+          # 排除用户指定的插件
+          EXCLUDE_NORMALIZED=$(printf '%s' "$EXCLUDE_PKGS" | tr ',' ' ')
           FINAL=""
 
           for p in $RES; do
@@ -335,7 +309,7 @@ jobs:
 
             for excluded in $EXCLUDE_NORMALIZED; do
               if [ "$p" = "$excluded" ]; then
-                echo "跳过排除插件: $p"
+                echo "排除插件: $p"
                 SKIP=true
                 break
               fi
@@ -353,7 +327,7 @@ jobs:
             exit 1
           fi
 
-          echo "最终编译列表："
+          echo "最终编译列表:"
           echo "$FINAL"
 
           printf '%s\n' $FINAL > pkglist.txt
@@ -361,8 +335,8 @@ jobs:
           cat pkglist.txt
 
       # ----------------------------------------------------------------------
-      # 7. 注入仓库插件到 SDK
-      #    sing-box 不再注入旧目录，直接使用最新 feed 包
+      # 7. 注入本地插件到 SDK
+      #    sing-box 保留在 feeds/packages/net/sing-box
       # ----------------------------------------------------------------------
       - name: Inject packages into SDK
         run: |
@@ -374,16 +348,15 @@ jobs:
             [ -z "$p" ] && continue
 
             if [ "$p" = "sing-box" ]; then
-              echo "sing-box 使用最新 feed 版本，不注入仓库旧目录"
+              echo "sing-box 使用仓库最新版本，不再注入旧目录"
               continue
             fi
 
             if [ ! -d "../$p" ] || [ ! -f "../$p/Makefile" ]; then
-              echo "::warning::仓库包不存在，跳过注入: $p"
+              echo "::warning::本地包不存在，跳过注入: $p"
               continue
             fi
 
-            # 删除 feeds 中的同名包，避免重复定义
             find package/feeds \
               -type d \
               -name "$p" \
@@ -405,10 +378,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          sudo apt-get install -y -qq dos2unix
-
-          echo "统一修复仓库中的 patch 文件"
-
           find . \
             -path './sdk' -prune -o \
             -path './.git' -prune -o \
@@ -418,8 +387,6 @@ jobs:
             | xargs -0 -r dos2unix -q
 
           if [ -d axonhub ]; then
-            echo "修复 axonhub 文件行尾"
-
             find axonhub \
               -type f \
               \( -name '*.patch' \
@@ -455,7 +422,6 @@ jobs:
             echo "开始编译: $p"
             echo "=============================================================="
 
-            # sing-box 必须编译 feeds 中替换后的最新版本
             if [ "$p" = "sing-box" ]; then
               BUILD_TARGET="package/feeds/packages/sing-box/compile"
             else
@@ -478,10 +444,7 @@ jobs:
 
           done < ../pkglist.txt
 
-          echo "=============================================================="
-          echo "编译结果汇总"
-          echo "=============================================================="
-
+          echo "编译结果汇总:"
           cat ../build-result.txt
 
           if grep -q '^fail ' ../build-result.txt; then
@@ -490,7 +453,7 @@ jobs:
           fi
 
       # ----------------------------------------------------------------------
-      # 9. 仅收集本次选中插件的 IPK/APK
+      # 9. 收集本次选中的插件产物
       # ----------------------------------------------------------------------
       - name: Collect artifacts
         if: always()
@@ -513,8 +476,6 @@ jobs:
 
             echo "收集插件: $p"
 
-            # IPK 通常使用 package_version_arch.ipk
-            # APK 文件名可能使用 package-version.apk
             find sdk/bin \
               -type f \
               \( -name "${p}_*.ipk" \
@@ -528,17 +489,12 @@ jobs:
 
           done < pkglist.txt
 
-          echo "本次收集的插件产物："
-
-          find "$OUT" \
-            -maxdepth 1 \
-            -type f \
-            -printf '%f\n' \
-            | sort
+          echo "本次收集的插件产物:"
+          find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
 
           COUNT=$(find "$OUT" -maxdepth 1 -type f | wc -l)
 
-          echo "共收集 $COUNT 个插件包"
+          echo "共收集 $COUNT 个包"
 
           if [ "$COUNT" -eq 0 ]; then
             echo "::warning::没有收集到插件包"
@@ -575,12 +531,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       # ----------------------------------------------------------------------
-      # 11. 上传插件到 xiaojing110/package Releases
+      # 11. 自动发布到当前仓库 GitHub Releases
       # ----------------------------------------------------------------------
       - name: Publish packages to GitHub Releases
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.PACKAGE_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -592,19 +548,13 @@ jobs:
             TAG="${OWT_VER}-${TARGET}-${SUBTARGET}"
           fi
 
-          # 防止标签包含非法或不方便使用的字符
           TAG=$(printf '%s' "$TAG" | tr ' ' '-')
 
-          REPO="xiaojing110/package"
+          REPO="${GITHUB_REPOSITORY}"
           OUT="artifacts/${TAG}"
 
           echo "目标仓库: $REPO"
           echo "Release 标签: $TAG"
-
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::未配置 PACKAGE_RELEASE_TOKEN"
-            exit 1
-          fi
 
           if [ ! -d "$OUT" ]; then
             echo "::error::产物目录不存在: $OUT"
@@ -620,13 +570,11 @@ jobs:
             exit 1
           fi
 
-          echo "准备发布的插件包："
+          echo "准备发布的插件包:"
           printf '%s\n' "${FILES[@]}"
 
-          # Release 不存在时创建；不指定 --target，
-          # 由 GitHub 使用目标仓库默认分支创建标签。
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-            echo "Release 已存在，将更新附件"
+            echo "Release 已存在，准备更新附件"
           else
             gh release create "$TAG" \
               --repo "$REPO" \
@@ -637,20 +585,19 @@ jobs:
           OpenWrt 版本：${OWT_VER}
           编译方案：${PRESET}
 
-          本次发布仅包含工作流选中的仓库插件。"
+          本次发布包含所选插件的编译产物。"
           fi
 
-          # 上传文件；同名附件覆盖
           gh release upload "$TAG" \
             "${FILES[@]}" \
             --repo "$REPO" \
             --clobber
 
-          echo "插件发布成功"
-          echo "Release: https://github.com/${REPO}/releases/tag/${TAG}"
+          echo "发布成功:"
+          echo "https://github.com/${REPO}/releases/tag/${TAG}"
 
       # ----------------------------------------------------------------------
-      # 12. 上传编译日志
+      # 12. 上传编译日志到 Actions Artifacts
       # ----------------------------------------------------------------------
       - name: Upload build logs
         if: always()
@@ -660,4 +607,3 @@ jobs:
           path: build-logs/
           if-no-files-found: ignore
           retention-days: 7
-````
