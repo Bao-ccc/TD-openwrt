@@ -18,7 +18,7 @@
 ## 目录布局
 
 **插件包 / 软件包目录直接放在仓库根目录**，不嵌套二级目录
-（与 [`VIKINGYFY/packages`](https://github.com/VIKINGYFY/packages) 同布局）：
+：
 
 ```
 your-repo/                        ← 仓库根目录 = 一个 OpenWrt package feed
@@ -45,7 +45,7 @@ OpenWrt 直接拉取：见下文 **「📦 拉库」** 一节（本仓库：`htt
 编辑 OpenWrt 源码树根目录的 `feeds.conf.default`（或 `feeds.conf`），加一行：
 
 ```
-src-git package https://github.com/xiaojing110/package
+src-git xiaojing https://github.com/xiaojing110/package
 ```
 
 然后：
@@ -368,11 +368,17 @@ export WXPUSHER_TOPIC_IDS="123,456"
 > ⚠️ 旧名 `ipq807x/generic` 在新 OpenWrt 已废弃（并入 `qualcommax`），
 > snapshot 与 25.12.x 都没有该 target 的 SDK，选它必失败。已改成 `qualcommax/ipq807x`。
 
-### 选编译哪些插件（`preset`）
+### 选编译哪些插件
+
+**① `plugin` —— 下拉直接点名（35 项）**
+
+下拉里是仓库内**全部 34 个插件** + `all`（默认）。选中某一个就只编它。
+
+**② `preset` —— `plugin=all` 时按组批量**
 
 | preset | 内容 |
 |---|---|
-| **`all`** | **全部包（默认）** |
+| **`all`** | **全部（默认，再减去 `exclude`）** |
 | `luci-app` | 所有 `luci-app-*` |
 | `theme` | 所有 `luci-theme-*` |
 | `proxy-core` | `xray-core` `sing-box` `hysteria` `shadowsocks-rust` `mihomo-meta` `naiveproxy` `chinadns-ng` `mosdns` 等 16 个 |
@@ -380,6 +386,21 @@ export WXPUSHER_TOPIC_IDS="123,456"
 | `nikki` | nikki 全家桶 3 个 |
 | `mosdns` | `luci-app-mosdns` `mosdns` `geo2txt` |
 | `custom` | 自己填，用 `packages` 输入 |
+
+**③ `exclude` —— 默认不编译的包**
+
+```
+axonhub  luci-app-axonhub  shadow-tls  shadowsocks-rust
+```
+
+> 这 4 个默认跳过（`shadow-tls` / `shadowsocks-rust` 是 Rust 构建、很慢；
+> `axonhub` / `luci-app-axonhub` 同理）。
+>
+> **只对批量 preset 生效** —— 你显式点名就不拦：
+> * 在 `plugin` 下拉里选中它们 → 照常编译
+> * 在 `custom` 的 `packages` 里写上它们 → 照常编译
+>
+> 想让它们回到默认编译，把 `exclude` 留空即可。
 
 `custom` 时在 `packages` 里填包名，**空格或逗号分隔**，例如：
 

@@ -28,8 +28,49 @@ on:
         type: string
         default: "snapshot"
 
+      plugin:
+        description: "下拉选择要编译的插件（选 all 则按 preset 批量）"
+        type: choice
+        default: all
+        options:
+          - all
+          - axonhub
+          - chinadns-ng
+          - dns2socks
+          - gecoosac
+          - geo2txt
+          - geoview
+          - hysteria
+          - ipt2socks
+          - luci-app-axonhub
+          - luci-app-eqosplus
+          - luci-app-gecoosac
+          - luci-app-homeproxy
+          - luci-app-mosdns
+          - luci-app-nikki
+          - luci-app-passwall
+          - luci-app-passwall2
+          - luci-app-wolultra
+          - luci-theme-material3
+          - microsocks
+          - mihomo-meta
+          - mosdns
+          - naiveproxy
+          - nikki
+          - shadow-tls
+          - shadowsocks-rust
+          - shadowsocksr-libev
+          - simple-obfs
+          - sing-box
+          - smartdns
+          - tcping
+          - v2ray-geodata
+          - v2ray-plugin
+          - xray-core
+          - xray-plugin
+
       preset:
-        description: "要编译哪些插件"
+        description: "plugin=all 时按组编译"
         type: choice
         default: all
         options:
@@ -43,9 +84,14 @@ on:
           - custom
 
       packages:
-        description: "preset=custom 时使用：包名，空格或逗号分隔"
+        description: "plugin=all 且 preset=custom 时使用：包名，空格或逗号分隔"
         type: string
         default: ""
+
+      exclude:
+        description: "默认不编译的包（空格/逗号分隔）。在 plugin 下拉里点名、或 custom 里写包名时不受此限"
+        type: string
+        default: "axonhub luci-app-axonhub shadow-tls shadowsocks-rust"
 
       upload_all:
         description: "上传全部产物（含 -dbg / -dev），否则只上传主包"
@@ -64,8 +110,10 @@ jobs:
     env:
       PLATFORM: ${{ inputs.platform }}
       OWT_VER: ${{ inputs.openwrt_version }}
+      PLUGIN: ${{ inputs.plugin }}
       PRESET: ${{ inputs.preset }}
       CUSTOM_PKGS: ${{ inputs.packages }}
+      EXCLUDE_PKGS: ${{ inputs.exclude }}
       UPLOAD_ALL: ${{ inputs.upload_all }}
 
     steps:
@@ -81,33 +129,58 @@ jobs:
                 | sed 's|^\./||; s|/Makefile$||' | sort | tr '\n' ' ')
           echo "仓库内全部包: $ALL"
 
-          case "$PRESET" in
-            all)
-              LIST="$ALL" ;;
-            luci-app)
-              LIST=$(echo "$ALL" | tr ' ' '\n' | grep -E '^luci-app-' | tr '\n' ' ') ;;
-            theme)
-              LIST=$(echo "$ALL" | tr ' ' '\n' | grep -E '^luci-theme-' | tr '\n' ' ') ;;
-            proxy-core)
-              LIST="xray-core xray-plugin v2ray-plugin sing-box hysteria shadowsocks-rust \
-                    shadow-tls naiveproxy chinadns-ng geoview microsocks tcping simple-obfs \
-                    mihomo-meta mosdns geo2txt" ;;
-            passwall)
-              LIST="luci-app-passwall xray-core xray-plugin v2ray-plugin sing-box hysteria \
-                    shadowsocks-rust shadow-tls shadowsocksr-libev naiveproxy chinadns-ng \
-                    dns2socks geoview microsocks tcping simple-obfs ipt2socks v2ray-geodata \
-                    smartdns" ;;
-            nikki)
-              LIST="luci-app-nikki nikki mihomo-meta" ;;
-            mosdns)
-              LIST="luci-app-mosdns mosdns geo2txt" ;;
-            custom)
-              LIST=$(echo "$CUSTOM_PKGS" | tr ',' ' ') ;;
-            *)
-              echo "::error::未知 preset: $PRESET"; exit 1 ;;
-          esac
+          # ---- 先定 LIST ----
+          # 显式点名（下拉选中单个包 / custom 里写包名）→ 不受 exclude 影响
+          # 批量（plugin=all 且 preset≠custom）→ 再减去 exclude
+          SKIP_EXCLUDE="no"
+          if [ "${PLUGIN:-all}" != "all" ]; then
+            LIST="$PLUGIN"
+            SKIP_EXCLUDE="yes"
+            echo "→ 下拉选中单个插件: $PLUGIN（不套 exclude）"
+          else
+            case "${PRESET:-all}" in
+              all)
+                LIST="$ALL" ;;
+              luci-app)
+                LIST=$(echo "$ALL" | tr ' ' '\n' | grep -E '^luci-app-' | tr '\n' ' ') ;;
+              theme)
+                LIST=$(echo "$ALL" | tr ' ' '\n' | grep -E '^luci-theme-' | tr '\n' ' ') ;;
+              proxy-core)
+                LIST="xray-core xray-plugin v2ray-plugin sing-box hysteria shadowsocks-rust \
+                      shadow-tls naiveproxy chinadns-ng geoview microsocks tcping simple-obfs \
+                      mihomo-meta mosdns geo2txt" ;;
+              passwall)
+                LIST="luci-app-passwall xray-core xray-plugin v2ray-plugin sing-box hysteria \
+                      shadowsocks-rust shadow-tls shadowsocksr-libev naiveproxy chinadns-ng \
+                      dns2socks geoview microsocks tcping simple-obfs ipt2socks v2ray-geodata \
+                      smartdns" ;;
+              nikki)
+                LIST="luci-app-nikki nikki mihomo-meta" ;;
+              mosdns)
+                LIST="luci-app-mosdns mosdns geo2txt" ;;
+              custom)
+                LIST=$(echo "${CUSTOM_PKGS:-}" | tr ',' ' ')
+                SKIP_EXCLUDE="yes"
+                echo "→ custom 显式点名（不套 exclude）" ;;
+              *)
+                echo "::error::未知 preset: $PRESET"; exit 1 ;;
+            esac
+          fi
 
-          # 去重 + 校验存在
+          # ---- 减去默认不编译的包（只对批量 preset 生效）----
+          if [ "$SKIP_EXCLUDE" = "no" ] && [ -n "${EXCLUDE_PKGS:-}" ]; then
+            EX=$(echo "$EXCLUDE_PKGS" | tr ',' ' ')
+            echo "→ 默认不编译: $EX"
+            for e in $EX; do
+              NL=""
+              for p in $LIST; do
+                if [ "$p" != "$e" ]; then NL="$NL $p"; fi
+              done
+              LIST="$NL"
+            done
+          fi
+
+          # ---- 去重 + 校验存在 ----
           RES=""
           for p in $LIST; do
             if [ ! -d "$p" ] || [ ! -f "$p/Makefile" ]; then
@@ -120,7 +193,7 @@ jobs:
           RES=$(echo "$RES" | xargs)
 
           if [ -z "$RES" ]; then
-            echo "::error::解析出的包列表为空（preset=$PRESET）"
+            echo "::error::解析出的包列表为空（plugin=${PLUGIN:-all} preset=${PRESET:-all} exclude=${EXCLUDE_PKGS:-无}）"
             exit 1
           fi
 
