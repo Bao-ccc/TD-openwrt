@@ -44,14 +44,13 @@ on:
         description: "上传全部产物（含 -dbg / -dev），否则只上传主包"
         type: boolean
         default: false
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    # 所有输入只在这里出现一次，后续步骤一律用 $PLATFORM / $OWT_VER … 引用
     env:
       PLATFORM: ${{ inputs.platform }}
       OWT_VER: ${{ inputs.openwrt_version }}
@@ -61,7 +60,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
@@ -69,7 +67,6 @@ jobs:
             build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
             gettext git libncurses-dev libssl-dev python3 rsync unzip zlib1g-dev \
             file wget zstd curl jq
-
       - name: Resolve SDK
         run: |
           set -euo pipefail
@@ -81,6 +78,7 @@ jobs:
             BASE="https://downloads.openwrt.org/releases/${OWT_VER}/targets/${TARGET}/${SUBTARGET}"
           fi
           echo "→ 目录: $BASE"
+          # SDK 文件名里带 GCC 版本（gcc-14.3.0_musl…），不能硬编码，从目录列表解析
           SDK_FILE=$(curl -sL --fail --retry 3 "$BASE/" \
             | grep -oE 'openwrt-sdk-[^"<]+\.Linux-x86_64\.tar\.(zst|xz)' \
             | sort -u | head -1)
@@ -89,6 +87,7 @@ jobs:
             exit 1
           fi
           echo "→ SDK:   $SDK_FILE"
+          # 写成 env 文件供后续步骤 source，避免反复插值
           {
             echo "SDK_URL=${BASE}/${SDK_FILE}"
             echo "SDK_FILE=${SDK_FILE}"
@@ -97,7 +96,6 @@ jobs:
             echo "TAG=${OWT_VER}-${TARGET}-${SUBTARGET}"
           } > sdk.env
           cat sdk.env
-
       - name: Download & extract SDK
         run: |
           set -euo pipefail
@@ -112,32 +110,29 @@ jobs:
             *) echo "::error::未知 SDK 归档格式: $SDK_FILE"; exit 1 ;;
           esac
           ls sdk | head
-
       - name: Update feeds
         run: |
           set -euo pipefail
           cd sdk
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-
-          # ========== 强制使用 Golang 1.27.3 ==========
-                    echo "→ 替换 golang 为 1.27.3（master）"
+          echo "→ 替换 golang 为 1.27.3（master）"
           rm -rf feeds/packages/lang/golang
           git clone --depth 1 \
             https://github.com/openwrt/packages.git /tmp/owrt-packages
           cp -a /tmp/owrt-packages/lang/golang feeds/packages/lang/golang
           rm -rf /tmp/owrt-packages
 
+          ./scripts/feeds update -a
           ./scripts/feeds install -a
-
           echo "→ 当前 golang 版本信息:"
           grep -E 'GO_DEFAULT_VERSION|GO_VERSION_MAJOR_MINOR|GO_VERSION_PATCH' \
             feeds/packages/lang/golang/golang-values.mk \
             feeds/packages/lang/golang/golang1.27/Makefile 2>/dev/null || true
-
       - name: Resolve package list
         run: |
           set -euo pipefail
+          # 仓库根目录下所有含 Makefile 的目录 = 可编译的包
           ALL=$(find . -maxdepth 2 -name Makefile \
                   -not -path './sdk/*' -not -path './.git/*' \
                 | sed 's|^\./||; s|/Makefile$||' | sort | tr '\n' ' ')
@@ -165,6 +160,7 @@ jobs:
             *)
               echo "::error::未知 preset: $PRESET"; exit 1 ;;
           esac
+          # 去重 + 校验存在
           RES=""
           for p in $LIST; do
             if [ ! -d "$p" ] || [ ! -f "$p/Makefile" ]; then
@@ -182,78 +178,47 @@ jobs:
           echo "→ 将编译: $RES"
           echo "$RES" > pkglist.txt
           cat pkglist.txt
-
       - name: Inject packages into SDK
         run: |
           set -euo pipefail
           cd sdk
           for p in $(cat ../pkglist.txt); do
+            # 同名 feed 包会让 make 报重复定义，先让我们的版本赢
             find package/feeds -maxdepth 2 -type d -name "$p" \
                  -exec rm -rf {} + 2>/dev/null || true
             rm -rf "package/$p"
             cp -a "../$p" "package/$p"
             echo "→ package/$p"
           done
-
       - name: Build
         run: |
           set -uo pipefail
           cd sdk
           make defconfig
-
           mkdir -p ../build-logs
           : > ../build-result.txt
-
-          TARGETS=""
           for p in $(cat ../pkglist.txt); do
-            TARGETS="$TARGETS package/$p/compile"
-          done
-
-          echo "=============================================================="
-          echo "▶ 并行编译所有包 ($(nproc) 核)  [失败继续 -k]"
-          echo "  目标: $TARGETS"
-          echo "=============================================================="
-
-          # -k : 某个包失败后继续编译其余包
-          set +e
-          make $TARGETS -j"$(nproc)" -k V=s \
-            > ../build-logs/all.log 2>&1
-          MAKE_RC=$?
-          set -e
-
-          # 根据是否真正生成了 ipk/apk 判断每个包结果
-          for p in $(cat ../pkglist.txt); do
-            if find bin -type f \( \
-                 -name "${p}_*.ipk" -o \
-                 -name "${p}-*.apk" -o \
-                 -name "${p}_*.apk" \
-               \) 2>/dev/null | grep -q .; then
+            echo "=============================================================="
+            echo "▶ 编译 $p"
+            echo "=============================================================="
+            if make "package/$p/compile" -j"$(nproc)" V=s \
+                 > "../build-logs/$p.log" 2>&1; then
               echo "✅ $p"
               echo "ok   $p" >> ../build-result.txt
             else
-              echo "❌ $p"
+              echo "❌ $p  （末尾日志如下）"
+              tail -40 "../build-logs/$p.log" || true
               echo "fail $p" >> ../build-result.txt
-              # 抽取该包相关错误到单独日志
-              grep -E "(^make\[|/package/$p/|ERROR:|error:|Patch failed|FAILED)" \
-                ../build-logs/all.log 2>/dev/null \
-                | tail -120 > "../build-logs/$p.log" || true
             fi
           done
-
           echo "=============================================================="
-          echo "结果汇总:"
+          echo "结果:"
           cat ../build-result.txt
-          echo "=============================================================="
-
+          # 有失败就让 job 失败（产物与日志仍会因 if:always() 上传）
           if grep -q '^fail ' ../build-result.txt; then
-            echo "::error::部分包编译失败，详见 build-logs 产物"
+            echo "::error::有包编译失败，详见 build-logs 产物"
             exit 1
           fi
-
-          if [ "$MAKE_RC" -ne 0 ]; then
-            echo "::warning::make 返回码 $MAKE_RC，但所有包产物均已生成"
-          fi
-
       - name: Collect artifacts
         if: always()
         run: |
@@ -261,6 +226,7 @@ jobs:
           . ./sdk.env
           OUT="artifacts/${TAG}"
           mkdir -p "$OUT"
+          # OpenWrt 25.x 用 .apk，24.x 及以前用 .ipk，两种都收
           if [ "$UPLOAD_ALL" = "true" ]; then
             find sdk/bin -type f \( -name '*.ipk' -o -name '*.apk' \) \
                  -exec cp -a {} "$OUT/" \;
@@ -274,7 +240,6 @@ jobs:
           COUNT=$(find "$OUT" -type f | wc -l)
           echo "→ 共 $COUNT 个包"
           [ "$COUNT" -gt 0 ] || echo "::warning::没有收集到任何产物"
-
       - name: Summary
         if: always()
         run: |
@@ -293,7 +258,6 @@ jobs:
             cat build-result.txt 2>/dev/null || echo "(无)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Upload packages
         if: always()
         uses: actions/upload-artifact@v4
@@ -302,7 +266,6 @@ jobs:
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14
-
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4

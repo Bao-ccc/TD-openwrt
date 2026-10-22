@@ -1,9 +1,9 @@
 name: Auto Sync
 
 on:
-  # 定时同步：每 6 小时一次（可自行调整）
+  # 定时同步：每 1 小时一次（可自行调整）
   schedule:
-    - cron: "15 */6 * * *"
+    - cron: "15 */1 * * *"
 
   # 手动触发
   workflow_dispatch:
