@@ -18,7 +18,7 @@
 ## 目录布局
 
 **插件包 / 软件包目录直接放在仓库根目录**，不嵌套二级目录
-：
+（与 [`VIKINGYFY/packages`](https://github.com/VIKINGYFY/packages) 同布局）：
 
 ```
 your-repo/                        ← 仓库根目录 = 一个 OpenWrt package feed
@@ -45,7 +45,7 @@ OpenWrt 直接拉取：见下文 **「📦 拉库」** 一节（本仓库：`htt
 编辑 OpenWrt 源码树根目录的 `feeds.conf.default`（或 `feeds.conf`），加一行：
 
 ```
-src-git xiaojing https://github.com/xiaojing110/package
+src-git package https://github.com/xiaojing110/package
 ```
 
 然后：
@@ -414,6 +414,35 @@ luci-app-passwall, xray-core, sing-box
 |---|---|---|
 | `openwrt_version` | `snapshot` | 也可填 `25.12.6` / `24.10.5` |
 | `upload_all` | `false` | 开启则连 `-dbg` / `-dev` 一起上传 |
+| **`build_mode`** | `full` | **编译范围**：`full` 完整编译 / `new-commits` 只编新提交改动的包 |
+| **`upload_release`** | `true` | **把产物上传到 GitHub Releases**（滚动 tag，每次覆盖） |
+
+### `build_mode`：完整编译 vs 新提交编译
+
+* **`full`** —— 把 `plugin`/`preset`/`exclude` 解析出来的包全编一遍。
+* **`new-commits`** —— 只编**新提交改动到的包**。
+  1. 读上一次 Release 里 `build-info.txt` 的 `commit=<sha>`
+  2. `git diff --name-only <sha>..HEAD` 取改动到的第一级目录（即包目录）
+  3. 跟本次解析出的列表求交集，只编交集
+  * 首次构建 / 拿不到上次 commit / 该 commit 不在本地历史 → **自动退回完整编译**
+  * 没有任何改动 → 直接跳过，不浪费机器
+  * checkout 用了 `fetch-depth: 0`，不然 git diff 拿不到历史
+
+### 产物发布到 GitHub Releases
+
+每次编译完把 `.ipk`/`.apk` 传到**按平台滚动的 Release**：
+
+```
+tag   packages-<openwrt>-<target>-<subtarget>
+例     packages-snapshot-x86-64
+       packages-25.12.6-armsr-armv8
+```
+
+同名 tag 每次覆盖（`gh release upload --clobber`），用户永远拿最新。
+Release 正文是 `build-info.txt`：commit、时间、平台、编译了哪些包、各自成败。
+那个 `commit=` 就是 `new-commits` 模式的 diff 基准。
+
+不需要就把 `upload_release` 设为 `false`（仍然会传 Actions 的 artifact）。
 
 > `snapshot` 的 SDK 文件名**不带版本号**（`openwrt-sdk-x86-64_gcc-…`），
 > 正式版则带（`openwrt-sdk-25.12.6-x86-64_gcc-…`）。脚本从目录列表正则匹配，
@@ -421,9 +450,23 @@ luci-app-passwall, xray-core, sing-box
 
 ### 实现要点
 
+* **`axonhub` / `luci-app-axonhub` 的依赖自动补全**：
+  `axonhub` 的 `PKG_BUILD_DEPENDS:=golang/host node/host node-pnpm/host`，
+  但 **openwrt/packages 的 `lang/` 下没有 `node-pnpm`**（只有 `node` / `node-yarn`），
+  make 直接 `No rule to make target`。而且它的前端要跑 `pnpm install` / `pnpm run build`。
+  两步解决：
+  1. **主动装工具链**：列表里有 axonhub 就装 `nodejs npm` + `sudo npm install -g pnpm`
+  2. **`tools/auto-deps.sh` 自动生成宿主包存根**：扫描所有 `PKG_BUILD_DEPENDS` 里的
+     `<name>/host`，发现 SDK 里没有就生成 `package/<name>/Makefile`（`HostBuild`），
+     存根的 `Host/Compile` 按 hint 表装真工具（`node-pnpm`→`npm i -g pnpm`，
+     `yarn`→`npm i -g yarn`，`rust`→rustup，…）。
+     **其它包缺宿主工具也会被同样补齐**，不只 axonhub。
+  * 还有一层**失败自愈**：编译失败时扫日志（`pnpm: not found` / `node: not found` /
+    `cargo: not found` / `No rule to make target.*node-pnpm`），装完自动重试一次。
 * **SDK 文件名动态解析**：`openwrt-sdk-<ver>-<target>-<subtarget>_gcc-<gcc>_musl.Linux-x86_64.tar.zst`
   里的 GCC 版本会随 OpenWrt 版本变（25.12 是 `gcc-14.3.0`，24.10 是 `gcc-13.3.0`），
   硬编码必失效。改为**拉目录列表正则匹配**，任何版本/平台都能解析。
+  snapshot 的文件名**不带版本号**（`openwrt-sdk-x86-64_gcc-…`），两种写法都吃得下。
 * **make target 名回退**：make 的 target 用 build target 名（通常是目录名），
   但少数包 `PKG_NAME` 与目录不一致（如 `xray-core` 目录 vs `PKG_NAME:=Xray-core`）。
   拿到 `No rule to make target` 时自动改用 `PKG_NAME` 重试。

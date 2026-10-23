@@ -98,8 +98,21 @@ on:
         type: boolean
         default: false
 
+      build_mode:
+        description: "编译范围"
+        type: choice
+        default: full
+        options:
+          - full
+          - new-commits
+
+      upload_release:
+        description: "把编译产物上传到 GitHub Releases"
+        type: boolean
+        default: true
+
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -115,10 +128,16 @@ jobs:
       CUSTOM_PKGS: ${{ inputs.packages }}
       EXCLUDE_PKGS: ${{ inputs.exclude }}
       UPLOAD_ALL: ${{ inputs.upload_all }}
+      BUILD_MODE: ${{ inputs.build_mode }}
+      UPLOAD_RELEASE: ${{ inputs.upload_release }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # new-commits 模式要 git diff 旧提交..HEAD，必须拿完整历史
+          fetch-depth: 0
+          fetch-tags: true
 
       # ---- 先解析包列表：错了就立刻失败，别浪费十分钟下 SDK ----
       - name: Resolve package list
@@ -201,6 +220,63 @@ jobs:
           echo "$RES" > pkglist.txt
           cat pkglist.txt
 
+      # ---- build_mode=new-commits：只编新提交改动的包 ----
+      - name: Resolve build scope (new-commits)
+        run: |
+          set -uo pipefail
+          . ./sdk.env 2>/dev/null || TAG="${OWT_VER}-${PLATFORM%%/*}-${PLATFORM##*/}"
+          REL_TAG="packages-${TAG}"
+
+          if [ "${BUILD_MODE:-full}" != "new-commits" ]; then
+            echo "→ 完整编译（build_mode=${BUILD_MODE:-full}）"
+            exit 0
+          fi
+
+          # 上次构建到哪个 commit，记录在 Release 的 build-info.txt 里
+          LAST=""
+          if command -v gh >/dev/null 2>&1 && [ -n "${GH_TOKEN:-}" ]; then
+            gh release download "$REL_TAG" -p 'build-info.txt' -D /tmp/bi >/dev/null 2>&1 || true
+            [ -f /tmp/bi/build-info.txt ] && LAST=$(sed -n 's/^commit=//p' /tmp/bi/build-info.txt | head -1)
+          fi
+          if [ -z "$LAST" ]; then
+            LAST=$(curl -sL --fail --retry 2 \
+                    "https://github.com/${GITHUB_REPOSITORY}/releases/download/${REL_TAG}/build-info.txt" \
+                    2>/dev/null | sed -n 's/^commit=//p' | head -1 || true)
+          fi
+
+          if [ -z "$LAST" ]; then
+            echo "→ 找不到上次构建记录（首次构建？）→ 退回完整编译"
+            exit 0
+          fi
+          if ! git cat-file -e "$LAST^{commit}" 2>/dev/null; then
+            echo "→ 上次 commit $LAST 不在本地历史里 → 退回完整编译"
+            exit 0
+          fi
+
+          echo "→ 上次构建 commit: $LAST"
+          echo "→ 本次 HEAD:       $(git rev-parse --short HEAD)"
+
+          # 取改动到的第一级目录（即包目录），再跟已解析的列表求交集
+          CHANGED=$(git diff --name-only "$LAST"..HEAD | cut -d/ -f1 | sort -u | tr '\n' ' ')
+          echo "→ 新提交改动的顶层条目: ${CHANGED:-<无>}"
+
+          NEW=""
+          for p in $(cat pkglist.txt); do
+            case " $CHANGED " in *" $p "*) NEW="$NEW $p" ;; esac
+          done
+          NEW=$(echo "$NEW" | xargs)
+
+          if [ -z "$NEW" ]; then
+            echo "::notice::新提交没有改动任何待编译的包，本次无需编译"
+            echo "skip=true" > build-scope.env
+            : > pkglist.txt
+            exit 0
+          fi
+
+          echo "→ new-commits 精简后: $NEW"
+          echo "$NEW" > pkglist.txt
+          echo "skip=false" > build-scope.env
+
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
@@ -209,6 +285,32 @@ jobs:
             gettext git libncurses-dev libssl-dev libelf-dev \
             python3 python3-setuptools python3-pyelftools \
             rsync unzip zlib1g-dev file wget zstd curl jq
+
+      # ---- 按需自动补全宿主工具链 ----
+      # axonhub 的前端要 Node.js + pnpm 才能编（Makefile 里 pnpm install / pnpm run build）
+      - name: Install host toolchains (auto)
+        run: |
+          set -uo pipefail
+          LIST=$(cat pkglist.txt 2>/dev/null || echo "")
+
+          if echo " $LIST " | grep -qE '[[:space:]](axonhub|luci-app-axonhub)[[:space:]]'; then
+            echo "→ 检测到 axonhub：安装 Node.js + npm + pnpm"
+            sudo apt-get install -y -qq nodejs npm
+            sudo npm install -g pnpm
+            echo "  node  : $(node -v 2>/dev/null || echo 未装上)"
+            echo "  npm   : $(npm -v 2>/dev/null || echo 未装上)"
+            echo "  pnpm  : $(pnpm -v 2>/dev/null || echo 未装上)"
+          else
+            echo "→ 本次不需要 Node.js / pnpm"
+          fi
+
+          # 顺手确认其它常用宿主工具存在，缺了就补
+          for t in python3 rsync zstd; do
+            if ! command -v "$t" >/dev/null 2>&1; then
+              echo "→ 缺少 $t，自动安装"
+              sudo apt-get install -y -qq "$t" || true
+            fi
+          done
 
       - name: Resolve SDK
         run: |
@@ -297,6 +399,14 @@ jobs:
           done
 
           echo ""
+          echo "→ 自动补全缺失的构建依赖"
+          if [ -f ../tools/auto-deps.sh ]; then
+            bash ../tools/auto-deps.sh ../pkglist.txt || true
+          else
+            echo "  （找不到 tools/auto-deps.sh，跳过）"
+          fi
+
+          echo ""
           echo "→ 专项检查：OpenWrt 自带的 sing-box 是否已清干净"
           if [ -e feeds/packages/net/sing-box ]; then
             echo "  ❌ feeds/packages/net/sing-box 仍存在"
@@ -329,6 +439,19 @@ jobs:
       - name: Build
         run: |
           set -uo pipefail
+
+          # new-commits 模式下若无改动，直接跳过
+          if [ -f build-scope.env ] && grep -q '^skip=true' build-scope.env; then
+            echo "→ 没有新改动，跳过编译"
+            : > build-result.txt
+            exit 0
+          fi
+          if [ ! -s pkglist.txt ]; then
+            echo "→ 包列表为空，跳过编译"
+            : > build-result.txt
+            exit 0
+          fi
+
           cd sdk
 
           if ! make defconfig; then
@@ -338,6 +461,33 @@ jobs:
 
           mkdir -p ../build-logs
           : > ../build-result.txt
+
+          # 缺什么工具就装什么，然后重试一次
+          auto_heal() {
+            local log="$1"
+            if grep -qiE 'pnpm(:| ).*(not found|command not found)|pnpm: not found' "$log"; then
+              echo "  ↳ 日志显示缺 pnpm，自动安装后重试"
+              sudo npm install -g pnpm >/dev/null 2>&1 || npm install -g pnpm >/dev/null 2>&1 || true
+              return 0
+            fi
+            if grep -qiE 'node(:| ).*(not found|command not found)|nodejs.*not found' "$log"; then
+              echo "  ↳ 日志显示缺 node，自动安装后重试"
+              sudo apt-get install -y -qq nodejs npm >/dev/null 2>&1 || true
+              sudo npm install -g pnpm >/dev/null 2>&1 || true
+              return 0
+            fi
+            if grep -qiE 'cargo(:| ).*(not found|command not found)|rustc.*not found' "$log"; then
+              echo "  ↳ 日志显示缺 Rust，自动安装后重试"
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y >/dev/null 2>&1 || true
+              return 0
+            fi
+            if grep -qiE 'No rule to make target.*node-pnpm|node-pnpm/host' "$log"; then
+              echo "  ↳ 缺 node-pnpm 宿主包，重新生成存根后重试"
+              ( cd .. && bash tools/auto-deps.sh pkglist.txt ) >/dev/null 2>&1 || true
+              return 0
+            fi
+            return 1
+          }
 
           for p in $(cat ../pkglist.txt); do
             echo "=============================================================="
@@ -368,6 +518,15 @@ jobs:
               TGT="$PKGNAME"
               if make "package/$TGT/compile" -j"$(nproc)" V=s >> "$LOG" 2>&1; then
                 echo "✅ $p (as $PKGNAME)"
+                echo "ok   $p" >> ../build-result.txt
+                continue
+              fi
+            fi
+
+            # 自动补依赖后重试一次
+            if auto_heal "$LOG"; then
+              if make "package/$TGT/compile" -j"$(nproc)" V=s >> "$LOG" 2>&1; then
+                echo "✅ $p（自动补依赖后）"
                 echo "ok   $p" >> ../build-result.txt
                 continue
               fi
@@ -449,3 +608,50 @@ jobs:
           path: build-logs/
           if-no-files-found: ignore
           retention-days: 7
+
+      # ---- 上传到 GitHub Releases（滚动发布，同名 tag 每次覆盖）----
+      - name: Upload to Release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          if [ "${UPLOAD_RELEASE:-true}" != "true" ]; then echo "→ upload_release=false，跳过"; exit 0; fi
+          if [ -f ./sdk.env ]; then . ./sdk.env; else TAG="${OWT_VER}-${PLATFORM%%/*}-${PLATFORM##*/}"; fi
+          REL_TAG="packages-${TAG}"
+
+          OUT="artifacts/${TAG}"
+          N=$(find "$OUT" -type f \( -name '*.ipk' -o -name '*.apk' \) 2>/dev/null | wc -l)
+          if [ "$N" -eq 0 ]; then
+            echo "::notice::没有产物，跳过 Release 上传"
+            exit 0
+          fi
+
+          # 写 build-info.txt：下次 new-commits 就 diff 这个 commit
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "date=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo "platform=${PLATFORM}"
+            echo "openwrt=${OWT_VER}"
+            echo "build_mode=${BUILD_MODE:-full}"
+            echo "preset=${PRESET:-all}"
+            echo "plugin=${PLUGIN:-all}"
+            echo "packages=$(cat pkglist.txt 2>/dev/null | tr '\n' ' ')"
+            echo ""
+            echo "result:"
+            cat build-result.txt 2>/dev/null || echo "(无)"
+          } > build-info.txt
+
+          echo "→ Release: $REL_TAG  （$N 个包）"
+          # 滚动 tag：存在则更新，不存在则新建
+          if gh release view "$REL_TAG" >/dev/null 2>&1; then
+            gh release upload "$REL_TAG" "$OUT"/* build-info.txt --clobber
+            gh release edit "$REL_TAG" \
+              --title "OpenWrt 插件包 · ${PLATFORM} · ${OWT_VER}" \
+              --notes-file build-info.txt >/dev/null
+          else
+            gh release create "$REL_TAG" "$OUT"/* build-info.txt \
+              --title "OpenWrt 插件包 · ${PLATFORM} · ${OWT_VER}" \
+              --notes-file build-info.txt
+          fi
+          echo "→ 已发布到 Releases/${REL_TAG}"
