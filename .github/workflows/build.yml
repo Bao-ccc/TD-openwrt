@@ -28,6 +28,11 @@ on:
         type: string
         default: "snapshot"
 
+      mirror:
+        description: "下载镜像（留空 = 自动依次尝试官方+国内镜像）"
+        type: string
+        default: ""
+
       plugin:
         description: "下拉选择要编译的插件（选 all 则按 preset 批量）"
         type: choice
@@ -130,6 +135,7 @@ jobs:
       UPLOAD_ALL: ${{ inputs.upload_all }}
       BUILD_MODE: ${{ inputs.build_mode }}
       UPLOAD_RELEASE: ${{ inputs.upload_release }}
+      MIRROR: ${{ inputs.mirror }}
 
     steps:
       - name: Checkout
@@ -319,32 +325,56 @@ jobs:
           SUBTARGET="${PLATFORM##*/}"
 
           if [ "$OWT_VER" = "snapshot" ]; then
-            BASE="https://downloads.openwrt.org/snapshots/targets/${TARGET}/${SUBTARGET}"
+            SUBPATH="snapshots"
           else
-            BASE="https://downloads.openwrt.org/releases/${OWT_VER}/targets/${TARGET}/${SUBTARGET}"
+            SUBPATH="releases/${OWT_VER}"
           fi
 
-          echo "→ 目录: $BASE"
-          # SDK 文件名里带 GCC 版本（gcc-14.3.0_musl…），不能硬编码，从目录列表解析
-          SDK_FILE=$(curl -sL --fail --retry 3 "$BASE/" \
-            | grep -oE 'openwrt-sdk-[^"<]+\.Linux-x86_64\.tar\.(zst|xz)' \
-            | sort -u | head -1)
+          # 镜像列表：官方优先，后面是国内镜像兜底
+          # （downloads.openwrt.org 会偶发 502，实测 tuna 有完整 releases 树）
+          if [ -n "${MIRROR:-}" ]; then
+            MIRRORS="$MIRROR"
+          else
+            MIRRORS="https://downloads.openwrt.org \
+                     https://mirrors.tuna.tsinghua.edu.cn/openwrt \
+                     https://mirrors.ustc.edu.cn/openwrt"
+          fi
 
-          if [ -z "$SDK_FILE" ]; then
-            echo "::error::在 $BASE 下没找到 OpenWrt SDK"
+          echo "→ 目标: ${SUBPATH}/targets/${TARGET}/${SUBTARGET}"
+
+          SDK_URL=""; SDK_FILE=""; TRIED=""
+          for M in $MIRRORS; do
+            BASE="$M/${SUBPATH}/targets/${TARGET}/${SUBTARGET}"
+            TRIED="$TRIED $BASE/"
+            for attempt in 1 2 3; do
+              # 注意：不能用 head -1（会 SIGPIPE，pipefail 下拖垮整条管道），用 sed -n 1p
+              LISTING=$(curl -sL --retry 3 --retry-delay 3 \
+                         --connect-timeout 20 --max-time 90 "$BASE/" 2>/dev/null || true)
+              SDK_FILE=$(printf '%s\n' "$LISTING" \
+                         | grep -oE 'openwrt-sdk-[^"<]+\.Linux-x86_64\.tar\.(zst|xz)' \
+                         | sort -u | sed -n '1p' || true)
+              if [ -n "$SDK_FILE" ]; then break; fi
+              echo "  ⚠️ $BASE 没取到 SDK（第 ${attempt} 次，HTTP 可能 5xx）"
+              [ "$attempt" -lt 3 ] && sleep $((attempt * 10))
+            done
+            if [ -n "$SDK_FILE" ]; then SDK_URL="$BASE/$SDK_FILE"; break; fi
+          done
+
+          if [ -z "$SDK_URL" ]; then
+            echo "::error::所有镜像都没拿到 OpenWrt SDK"
+            echo "—— 试过的地址 ——"
+            for t in $TRIED; do echo "  $t"; done
             echo "—— 可能原因 ——"
-            echo "1) 平台 target/subtarget 名字不对或该版本没有预编译 SDK"
-            echo "   （旧名 ipq807x 已并入 qualcommax，需用 qualcommax/ipq807x）"
-            echo "2) openwrt_version 填错（25.12.6 / 24.10.5 / snapshot）"
-            echo "—— 该目录实际存在的 SDK ——"
-            curl -sL "$BASE/" | grep -oE 'openwrt-sdk-[^"<]+' | sort -u | head -20 || true
+            echo "1) downloads.openwrt.org 正在故障（实测会返 502），稍后重试或用 mirror 输入指定镜像"
+            echo "2) 平台 target/subtarget 名字不对（旧名 ipq807x 已并入 qualcommax，用 qualcommax/ipq807x）"
+            echo "3) 该版本没有这个平台的预编译 SDK（snapshot 不一定全，可试 25.12.6）"
             exit 1
           fi
 
-          echo "→ SDK:   $SDK_FILE"
-          # 写成 env 文件供后续步骤 source，避免反复插值
+          echo "→ 命中镜像: ${BASE}"
+          echo "→ SDK:      ${SDK_FILE}"
           {
-            echo "SDK_URL=${BASE}/${SDK_FILE}"
+            echo "SDK_URL=${SDK_URL}"
             echo "SDK_FILE=${SDK_FILE}"
             echo "TARGET=${TARGET}"
             echo "SUBTARGET=${SUBTARGET}"
@@ -357,7 +387,20 @@ jobs:
           set -euo pipefail
           . ./sdk.env
           echo "→ 下载 $SDK_URL"
-          curl -sL --fail --retry 3 --connect-timeout 30 -o sdk-archive "$SDK_URL"
+          # 分片重试：官方站点偶发 502，--retry 只对部分错误生效，这里显式重试
+          ok=0
+          for i in 1 2 3 4 5; do
+            if curl -sL --fail --retry 3 --retry-delay 5 \
+                 --connect-timeout 30 --max-time 1800 \
+                 -o sdk-archive "$SDK_URL"; then ok=1; break; fi
+            echo "⚠️ 第 $i 次下载失败，$((i * 15)) 秒后重试…"
+            rm -f sdk-archive
+            sleep $((i * 15))
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::SDK 下载失败（多次重试无效）: $SDK_URL"
+            exit 1
+          fi
           ls -lh sdk-archive
           mkdir -p sdk
           case "$SDK_FILE" in

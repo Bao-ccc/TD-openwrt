@@ -413,6 +413,7 @@ luci-app-passwall, xray-core, sing-box
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `openwrt_version` | `snapshot` | 也可填 `25.12.6` / `24.10.5` |
+| **`mirror`** | 空 | **下载镜像**，留空则自动依次尝试官方 + 国内镜像 |
 | `upload_all` | `false` | 开启则连 `-dbg` / `-dev` 一起上传 |
 | **`build_mode`** | `full` | **编译范围**：`full` 完整编译 / `new-commits` 只编新提交改动的包 |
 | **`upload_release`** | `true` | **把产物上传到 GitHub Releases**（滚动 tag，每次覆盖） |
@@ -463,6 +464,22 @@ Release 正文是 `build-info.txt`：commit、时间、平台、编译了哪些�
      **其它包缺宿主工具也会被同样补齐**，不只 axonhub。
   * 还有一层**失败自愈**：编译失败时扫日志（`pnpm: not found` / `node: not found` /
     `cargo: not found` / `No rule to make target.*node-pnpm`），装完自动重试一次。
+* **SDK 下载容灾**：`downloads.openwrt.org` **会偶发 502 Bad Gateway**（实测碰上过），
+  只拉它一个就会直接挂。现在：
+  1. **镜像兑底**：依次试 `downloads.openwrt.org` → `mirrors.tuna.tsinghua.edu.cn/openwrt`
+     → `mirrors.ustc.edu.cn/openwrt`，哪个先给出 SDK 就用哪个
+  2. **每个镜像重试 3 次**（带退避），下载本身再重试 5 次
+  3. **可用 `mirror` 输入指定镜像**，跳过自动探测
+  4. 全部失败时**打印试过的地址 + 可能原因**（旧名 `ipq807x`→`qualcommax` 等）
+* **修了一个 bash 大坑**：原写法
+  ```bash
+  SDK_FILE=$(curl … | grep … | sort -u | head -1)
+  ```
+  在 `set -euo pipefail` 下有两处会**先杀进程、连报错都没机会打**：
+  * `curl --fail` 遇 5xx 返回非零 → 赋值语句返回非零 → `set -e` 直接退出
+  * `head -1` 提前关管道 → 上游 `sort` 收 SIGPIPE 退 141 → `pipefail` 把它带出来
+  现改为 `| sed -n '1p'`（不关管道）+ `|| true` + 独立判空后 `exit 1`，
+  **错误信息一定能打出来**。
 * **SDK 文件名动态解析**：`openwrt-sdk-<ver>-<target>-<subtarget>_gcc-<gcc>_musl.Linux-x86_64.tar.zst`
   里的 GCC 版本会随 OpenWrt 版本变（25.12 是 `gcc-14.3.0`，24.10 是 `gcc-13.3.0`），
   硬编码必失效。改为**拉目录列表正则匹配**，任何版本/平台都能解析。
