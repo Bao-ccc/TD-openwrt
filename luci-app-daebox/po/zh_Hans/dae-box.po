@@ -1,0 +1,56 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "dae-box"
+msgstr "dae-box"
+
+msgid "dae-box 是融合 eBPF 内核旁路、sing-box 协议核心与 Clash 控制面的下一代透明代理引擎。"
+msgstr "dae-box 是融合 eBPF 内核旁路、sing-box 协议核心与 Clash 控制面的下一代透明代理引擎。"
+
+msgid "运行状态与基础设置"
+msgstr "运行状态与基础设置"
+
+msgid "启用 dae-box 服务"
+msgstr "启用 dae-box 服务"
+
+msgid "配置文件路径"
+msgstr "配置文件路径"
+
+msgid "订阅链接 (可选)"
+msgstr "订阅链接 (可选)"
+
+msgid "支持 Clash YAML 或 Base64 订阅链接，启动时自动拉取并解析"
+msgstr "支持 Clash YAML 或 Base64 订阅链接，启动时自动拉取并解析"
+
+msgid "混合监听端口 (Mixed Port)"
+msgstr "混合监听端口 (Mixed Port)"
+
+msgid "Clash REST API 控制端口"
+msgstr "Clash REST API 控制端口"
+
+msgid "API 访问密钥 (Secret)"
+msgstr "API 访问密钥 (Secret)"
+
+msgid "eBPF 内核旁路加速 (dae 特性)"
+msgstr "eBPF 内核旁路加速 (dae 特性)"
+
+msgid "启用 eBPF tc/ingress 旁路加速"
+msgstr "启用 eBPF tc/ingress 旁路加速"
+
+msgid "利用 eBPF 在网络接口层直接旁路放行局域网及直连流量，消除 iptables 开销并实现零拷贝"
+msgstr "利用 eBPF 在网络接口层直接旁路放行局域网及直连流量，消除 iptables 开销并实现零拷贝"
+
+msgid "监听网卡接口"
+msgstr "监听网卡接口"
+
+msgid "需要挂载 eBPF 过滤探针的局域网桥或物理网卡 (例如 br-lan, eth0)"
+msgstr "需要挂载 eBPF 过滤探针的局域网桥或物理网卡 (例如 br-lan, eth0)"
+
+msgid "Web 控制面板"
+msgstr "Web 控制面板"
+
+msgid "打开 Metacubexd 仪表盘"
+msgstr "打开 Metacubexd 仪表盘"
+
+msgid "打开控制面板"
+msgstr "打开控制面板"

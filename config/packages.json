@@ -30,7 +30,9 @@
         ".gitattributes",
         "LICENSE",
         "README.md",
-        "sing-box"
+        "sing-box",
+        "shadow-tls",
+        "shadowsocks-rust"
       ],
       "target": "."
     },
@@ -109,6 +111,26 @@
         "doc",
         "界面.png"
       ]
+    },
+    {
+      "name": "dae-box",
+      "repo": "hhCodingCat/dae-box",
+      "ref": "main",
+      "dirs": [
+        "openwrt/dae-box=>dae-box"
+      ],
+      "target": "."
+    },
+    {
+      "name": "luci-app-daebox",
+      "repo": "hhCodingCat/luci-app-dae-box",
+      "ref": "main",
+      "as_package": true,
+      "target": "luci-app-daebox",
+      "exclude": [
+        ".github",
+        ".gitignore"
+      ]
     }
   ],
   "packages": [
@@ -178,28 +200,6 @@
       "include_prerelease": false,
       "tag_prefix": "",
       "source_url": "https://codeload.github.com/snowie2000/geoview/tar.gz/${VERSION}?",
-      "reset_release_on_change": false
-    },
-    {
-      "name": "shadow-tls",
-      "repo": "ihciah/shadow-tls",
-      "makefile": "shadow-tls/Makefile",
-      "strategy": "tarball",
-      "source": "release",
-      "include_prerelease": false,
-      "tag_prefix": "v",
-      "source_url": "https://codeload.github.com/ihciah/shadow-tls/tar.gz/v${VERSION}?",
-      "reset_release_on_change": false
-    },
-    {
-      "name": "shadowsocks-rust",
-      "repo": "shadowsocks/shadowsocks-rust",
-      "makefile": "shadowsocks-rust/Makefile",
-      "strategy": "tarball",
-      "source": "release",
-      "include_prerelease": false,
-      "tag_prefix": "v",
-      "source_url": "https://codeload.github.com/shadowsocks/shadowsocks-rust/tar.gz/v${VERSION}?",
       "reset_release_on_change": false
     },
     {
@@ -683,6 +683,22 @@
       "makefile": "luci-app-eqosplus/Makefile",
       "strategy": "notify",
       "note": "luci.mk 型（PKG_NAME 由 $(THEME_NAME) 派生、无源码下载），由 luci-app-eqosplus 源码同步维护"
+    },
+    {
+      "name": "dae-box",
+      "makefile": "dae-box/Makefile",
+      "strategy": "notify",
+      "repo": "hhCodingCat/dae-box",
+      "source": "tag",
+      "include_prerelease": false,
+      "tag_prefix": "",
+      "note": "git-commit 型（PKG_SOURCE_PROTO:=git + PKG_SOURCE_VERSION=main）"
+    },
+    {
+      "name": "luci-app-daebox",
+      "makefile": "luci-app-daebox/Makefile",
+      "strategy": "notify",
+      "note": "luci.mk 型，由 luci-app-daebox 源码同步维护"
     }
   ]
 }

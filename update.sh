@@ -431,17 +431,31 @@ sync_source() {
   fi
   exclude_json=$(jq -c ".sources[$idx].exclude // []" "$CONFIG_FILE")
 
+  # items = 上游里的源路径，dests = 落地时用的目录名（支持 "src=>dst" 显式改名，
+  # 不写 => 则取 basename；上游里包可能嵌套在子目录，如 dae-box 的 openwrt/dae-box）
   local items=()
+  local dests=()
+  add_item() {
+    local e="$1" src dst
+    if [[ "$e" == *'=>'* ]]; then
+      src="${e%%=>*}"; dst="${e##*=>}"
+    else
+      src="$e"; dst="${e##*/}"
+    fi
+    [[ -e "$work/$src" ]] || { log "[警告] 上游没有 $src，跳过"; return 0; }
+    items+=("$src"); dests+=("$dst")
+  }
+
   if printf '%s' "$dirs_json" | jq -e 'index("*")' >/dev/null 2>&1; then
     # "*" = 顶层全部条目，排除 exclude
     while IFS= read -r e; do
-      items+=("$e")
+      add_item "$e"
     done < <(cd "$work" && ls -1A | while IFS= read -r e; do
       printf '%s' "$exclude_json" | jq -e --arg x "$e" 'index($x)' >/dev/null 2>&1 || printf '%s\n' "$e"
     done)
   else
     while IFS= read -r e; do
-      items+=("$e")
+      add_item "$e"
     done < <(printf '%s' "$dirs_json" | jq -r '.[]')
   fi
 
@@ -494,10 +508,13 @@ sync_source() {
     fi
   fi
 
+  local _i=0
   for it in "${items[@]}"; do
+    local dname="${dests[$_i]}"
+    _i=$((_i + 1))
     [[ -e "$work/$it" ]] || { log "[警告] 上游没有 ${it}，跳过"; continue; }
 
-    dst="${target}/${it}"
+    dst="${target}/${dname}"
     gate_up="$work/$it/Makefile"
     gate_loc="$dst/Makefile"
 
@@ -514,15 +531,15 @@ sync_source() {
           is_literal_ver "$ll" || continue
           cmp_desc+="${cmp_desc:+ }${vv}=${uu:-?}/${ll:-?}"
         done <<< "$ver_vars"
-        log "[源码] ${it} 上游版本不高于本地（${cmp_desc:-无可比变量}），忽略同步"
-        ignored+=("$it")
+        log "[源码] ${dname} 上游版本不高于本地（${cmp_desc:-无可比变量}），忽略同步"
+        ignored+=("$dname")
         continue
       fi
     fi
 
     if [[ "$DRY_RUN" == "true" ]]; then
       log "[dry-run] 将同步 ${repo}/${it} → ${dst}"
-      copied+=("$it")
+      copied+=("$dname")
       changed=1
       continue
     fi
@@ -530,9 +547,9 @@ sync_source() {
     rm -rf "$dst"
     mkdir -p "$target"
     cp -a "$work/$it" "$dst"
-    copied+=("$it")
+    copied+=("$dname")
     changed=1
-    log "[源码] 已同步 ${dst}"
+    log "[源码] 已同步 ${dst}${it:+  (来自 ${it})}"
   done
   rm -rf "$work"
 

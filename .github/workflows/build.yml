@@ -62,8 +62,6 @@ on:
           - mosdns
           - naiveproxy
           - nikki
-          - shadow-tls
-          - shadowsocks-rust
           - shadowsocksr-libev
           - simple-obfs
           - sing-box
@@ -73,6 +71,8 @@ on:
           - v2ray-plugin
           - xray-core
           - xray-plugin
+          - dae-box
+          - luci-app-daebox
 
       preset:
         description: "plugin=all 时按组编译"
@@ -96,7 +96,7 @@ on:
       exclude:
         description: "默认不编译的包（空格/逗号分隔）。在 plugin 下拉里点名、或 custom 里写包名时不受此限"
         type: string
-        default: "axonhub luci-app-axonhub shadow-tls shadowsocks-rust"
+        default: "axonhub luci-app-axonhub"
 
       upload_all:
         description: "上传全部产物（含 -dbg / -dev），否则只上传主包"
@@ -153,6 +153,8 @@ jobs:
           ALL=$(find . -maxdepth 2 -name Makefile -not -path './.git/*' \
                 | sed 's|^\./||; s|/Makefile$||' | sort | tr '\n' ' ')
           echo "仓库内全部包: $ALL"
+          # 存下来给 Collect artifacts 做白名单：只提交仓库内的插件
+          echo "$ALL" > repopkgs.txt
 
           # ---- 先定 LIST ----
           # 显式点名（下拉选中单个包 / custom 里写包名）→ 不受 exclude 影响
@@ -171,12 +173,12 @@ jobs:
               theme)
                 LIST=$(echo "$ALL" | tr ' ' '\n' | grep -E '^luci-theme-' | tr '\n' ' ') ;;
               proxy-core)
-                LIST="xray-core xray-plugin v2ray-plugin sing-box hysteria shadowsocks-rust \
-                      shadow-tls naiveproxy chinadns-ng geoview microsocks tcping simple-obfs \
-                      mihomo-meta mosdns geo2txt" ;;
+                LIST="xray-core xray-plugin v2ray-plugin sing-box hysteria \
+                      naiveproxy chinadns-ng geoview microsocks tcping simple-obfs \
+                      mihomo-meta mosdns geo2txt dae-box" ;;
               passwall)
                 LIST="luci-app-passwall xray-core xray-plugin v2ray-plugin sing-box hysteria \
-                      shadowsocks-rust shadow-tls shadowsocksr-libev naiveproxy chinadns-ng \
+                      shadowsocksr-libev naiveproxy chinadns-ng \
                       dns2socks geoview microsocks tcping simple-obfs ipt2socks v2ray-geodata \
                       smartdns" ;;
               nikki)
@@ -641,15 +643,42 @@ jobs:
           OUT="artifacts/${TAG}"
           mkdir -p "$OUT"
 
-          # OpenWrt 25.x 用 .apk，24.x 及以前用 .ipk，两种都收
-          if [ "$UPLOAD_ALL" = "true" ]; then
-            find sdk/bin -type f \( -name '*.ipk' -o -name '*.apk' \) \
-                 -exec cp -a {} "$OUT/" \; 2>/dev/null || true
-          else
-            find sdk/bin -type f \( -name '*.ipk' -o -name '*.apk' \) \
-                 ! -name '*-dbg.*' ! -name '*-dev.*' ! -name '*-src.*' \
-                 -exec cp -a {} "$OUT/" \; 2>/dev/null || true
-          fi
+          # 只保留**本仓库里的插件**；feed 依赖顺带编出来的（coreutils / golang / lua…）
+          # 不属于本仓库，一律丢弃，不打包也不上传 Release。
+          REPOPKGS=$(cat repopkgs.txt 2>/dev/null || echo "")
+          in_repo() {
+            local base="$1" d
+            [ -z "$REPOPKGS" ] && return 0   # 白名单缺失时保守保留
+            for d in $REPOPKGS; do
+              case "$base" in "$d"|"$d"-*) return 0 ;; esac
+            done
+            return 1
+          }
+          pkgname_of() {
+            local b
+            b=$(basename "$1")
+            b="${b%.ipk}"; b="${b%.apk}"
+            printf '%s' "${b%%_*}"     # 去掉 _<版本>_<架构>
+          }
+
+          DROPPED=0; KEPT=0
+          for f in $(find sdk/bin -type f \( -name '*.ipk' -o -name '*.apk' \) 2>/dev/null); do
+            BASE=$(pkgname_of "$f")
+            if ! in_repo "$BASE"; then
+              DROPPED=$((DROPPED + 1))
+              continue
+            fi
+            case "$UPLOAD_ALL" in
+              true) cp -a "$f" "$OUT/" ;;
+              *) case "$BASE" in
+                   *-dbg|*-dev|*-src) continue ;;
+                 esac
+                 cp -a "$f" "$OUT/" ;;
+            esac
+            KEPT=$((KEPT + 1))
+          done
+
+          echo "→ 保留本仓库插件 $KEPT 个，丢弃非本仓库依赖包 $DROPPED 个"
 
           echo "→ 产物:"
           ls -lh "$OUT" | head -60 || true

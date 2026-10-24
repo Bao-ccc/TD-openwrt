@@ -1,0 +1,12 @@
+{
+	"admin/services/dae-box": {
+		"title": "dae-box",
+		"action": {
+			"type": "view",
+			"path": "dae-box/overview"
+		},
+		"depends": {
+			"acl": [ "luci-app-dae-box" ]
+		}
+	}
+}

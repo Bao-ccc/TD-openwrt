@@ -109,6 +109,8 @@ bash update.sh --skip-source  # 只更新版本哈希
 | `luci-theme-material3` | `KawaiiHachimi/luci-theme-material3` | **整个仓库** → `luci-theme-material3/`（`as_package` 模式） |
 | `mosdns` | `sbwml/luci-app-mosdns`@**`v5`** | `luci-app-mosdns/` `mosdns/` `geo2txt/` |
 | `luci-app-eqosplus` | `sirpdboy/luci-app-eqosplus` | **整个仓库** → `luci-app-eqosplus/`（`as_package` 模式） |
+| `dae-box` | `hhCodingCat/dae-box` | `openwrt/dae-box` → **`dae-box/`**（`src=>dst` 改名） |
+| `luci-app-daebox` | `hhCodingCat/luci-app-dae-box` | **整个仓库** → `luci-app-daebox/`（`as_package` 模式） |
 
 > **`sing-box` 取自 `VIKINGYFY/packages`**（`passwall-packages` 的 `sing-box` 已加进 `exclude`）。
 > VIKINGYFY 的版本用 `PKG_UPSTREAM_VERSION` 承载（`PKG_VERSION` 由 `$(subst)` 派生），
@@ -130,7 +132,7 @@ bash update.sh --skip-source  # 只更新版本哈希
 | `name` | — | 名称，同时是状态文件名 |
 | `repo` | — | 上游仓库 `owner/repo` |
 | `ref` | `main` | 分支 / tag / commit |
-| `dirs` | `["*"]` | 要拷贝的目录；`"*"` = 顶层全部条目 |
+| `dirs` | `["*"]` | 要拷贝的条目；`"*"` = 顶层全部；支持 **`"src=>dst"`** 改名（上游包嵌套在子目录时用） |
 | `exclude` | `[]` | `dirs` 含 `"*"` 时排除的条目 |
 | `target` | `.` | 落地目录（`.` = 仓库根目录） |
 | `as_package` | `false` | **上游整棵树就是一个包**，全部落到 `target` 目录内（先清空再拷） |
@@ -201,7 +203,9 @@ bash update.sh --skip-source  # 只更新版本哈希
 > `PKG_VERSION:=$(subst …)` 这类派生式不会被碰。
 
 **已配置（12 个）**：`xray-core` `xray-plugin` `v2ray-plugin` `sing-box` `hysteria`
-`geoview` `shadow-tls` `shadowsocks-rust` `ipt2socks` `microsocks` `mosdns` `geo2txt`
+`geoview` `ipt2socks` `microsocks` `mosdns` `geo2txt`
+
+> 已移除 `shadow-tls` / `shadowsocks-rust` —— sing-box 与 xray-core 默认已内置同类能力，无需重复。
 
 > `mosdns` ← `IrineSistiana/mosdns`；`geo2txt` ← `sbwml/geo2txt`（注意它无 `v` 前缀，
 > `tag_prefix: ""`）。
@@ -289,7 +293,7 @@ bash update.sh --skip-source  # 只更新版本哈希
 * **Release 拿不到就回退到 tag**：有些仓库**只打 tag 不发 GitHub Release**
   （如 `XTLS/Xray-core`，`/releases` 返回空数组）。以前这会让包失败；
   现在 `source: "release"` 会先取 Release，取不到自动回退 `/tags`。
-  实测 `xray-core` `hysteria` `geoview` `shadow-tls` `shadowsocks-rust` `naiveproxy`
+  实测 `xray-core` `hysteria` `geoview` `naiveproxy`
   六个仓库都靠回退才能解析。
 * **单包失败不拖垮整次同步**：拿不到版本、下载失败、Makefile 缺失都只告警并跳过，
   其余包照常更新、照常 commit。需要硬失败（比如在 release 流水线里）加 `--strict`。
@@ -381,7 +385,7 @@ export WXPUSHER_TOPIC_IDS="123,456"
 | **`all`** | **全部（默认，再减去 `exclude`）** |
 | `luci-app` | 所有 `luci-app-*` |
 | `theme` | 所有 `luci-theme-*` |
-| `proxy-core` | `xray-core` `sing-box` `hysteria` `shadowsocks-rust` `mihomo-meta` `naiveproxy` `chinadns-ng` `mosdns` 等 16 个 |
+| `proxy-core` | `xray-core` `sing-box` `hysteria` `mihomo-meta` `naiveproxy` `chinadns-ng` `mosdns` `dae-box` 等 15 个 |
 | `passwall` | passwall 全家桶 19 个（luci-app + 全部依赖） |
 | `nikki` | nikki 全家桶 3 个 |
 | `mosdns` | `luci-app-mosdns` `mosdns` `geo2txt` |
@@ -390,11 +394,10 @@ export WXPUSHER_TOPIC_IDS="123,456"
 **③ `exclude` —— 默认不编译的包**
 
 ```
-axonhub  luci-app-axonhub  shadow-tls  shadowsocks-rust
+axonhub  luci-app-axonhub
 ```
 
-> 这 4 个默认跳过（`shadow-tls` / `shadowsocks-rust` 是 Rust 构建、很慢；
-> `axonhub` / `luci-app-axonhub` 同理）。
+> 这 2 个默认跳过（`axonhub` / `luci-app-axonhub` 要跑 Node.js + pnpm 前端构建，很慢）。
 >
 > **只对批量 preset 生效** —— 你显式点名就不拦：
 > * 在 `plugin` 下拉里选中它们 → 照常编译
@@ -497,6 +500,10 @@ Release 正文是 `build-info.txt`：commit、时间、平台、编译了哪些�
      （如 `feeds/packages/net/sing-box`，不删的话 make 仍会扫到 OpenWrt 自带的那份）
 * **sing-box 专项检查**：注入后会打印 `feeds/packages/net/sing-box` 是否已删、
   扫描路径里是否只剩本仓库那份，并对**每个**注入的包做唯一性校验。
+* **产物只留本仓库的插件**：SDK 编译会把 feed 依赖（`coreutils` / `golang` / `lua` /
+  `libuci`…）也顺带编出来，那些不属于本仓库。打包与 Release 上传前会用
+  仓库包目录做**白名单过滤**，非本仓库的依赖包一律丢弃，日志里会报
+  `保留本仓库插件 N 个，丢弃非本仓库依赖包 M 个`。
 * **`.ipk` / `.apk` 都收**：OpenWrt 25.x 换成 `apk` 包管理，24.x 及以前是 `ipk`。
 * **单包失败不拖垮整个 job**：逐包编译，失败的记进 `build-result.txt` 并在
   Summary 里列出，产物与日志仍会上传；全部失败则 job 标红。

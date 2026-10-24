@@ -1,0 +1,8 @@
+config dae-box 'config'
+	option enabled '0'
+	option config_file '/etc/dae-box/config.yaml'
+	option mixed_port '7890'
+	option api_port '9090'
+	option api_secret ''
+	option ebpf_enable '1'
+	list interfaces 'br-lan'

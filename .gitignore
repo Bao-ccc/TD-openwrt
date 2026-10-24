@@ -6,3 +6,15 @@
 .DS_Store
 *.swp
 Thumbs.db
+
+# CI 运行时产物（不该进仓库）
+pkglist.txt
+repopkgs.txt
+sdk.env
+sdk-archive
+build-info.txt
+build-scope.env
+build-result.txt
+build-logs/
+artifacts/
+sdk/

@@ -1,0 +1,14 @@
+{
+	"luci-app-dae-box": {
+		"description": "Grant UCI and service access for luci-app-dae-box",
+		"read": {
+			"uci": [ "dae-box" ],
+			"file": {
+				"/var/log/dae-box.log": [ "read" ]
+			}
+		},
+		"write": {
+			"uci": [ "dae-box" ]
+		}
+	}
+}
