@@ -418,12 +418,13 @@ jobs:
           ./scripts/feeds install -a
           
       - name: Replace golang with latest from openwrt/packages
+        if: env.OWT_VER != 'snapshot'
         run: |
           set -euo pipefail
           cd sdk
 
           TMP=$(mktemp -d)
-          echo "→ 拉取 openwrt/packages 最新 lang/golang"
+          echo "→ 拉取 openwrt/packages 最新 lang/golang（仅 release SDK 需要）"
           git clone --depth 1 --filter=blob:none --sparse \
             https://github.com/openwrt/packages.git "$TMP/packages"
           (
@@ -431,10 +432,9 @@ jobs:
             git sparse-checkout set lang/golang
           )
 
-          # 删掉 SDK 里原先整份 golang（含 golang1.26 / golang / values 等）
+          # 删掉 SDK 里原先整份 golang
           echo "→ 删除旧 golang 目录"
           rm -rf feeds/packages/lang/golang
-          # 清掉可能残留的 package/feeds 符号链接
           find package/feeds -name 'golang*' -exec rm -rf {} + 2>/dev/null || true
           find package/feeds -path '*/lang/golang*' -exec rm -rf {} + 2>/dev/null || true
 
@@ -443,7 +443,6 @@ jobs:
           cp -a "$TMP/packages/lang/golang" feeds/packages/lang/
           echo "→ 已替换为官方最新 golang"
 
-          # 确认版本
           if [ -f feeds/packages/lang/golang/golang1.27/Makefile ]; then
             echo "→ 检测到 golang1.27："
             grep -E 'GO_VERSION_MAJOR_MINOR|GO_VERSION_PATCH|PKG_HASH' \
@@ -453,12 +452,11 @@ jobs:
             grep 'GO_DEFAULT_VERSION' feeds/packages/lang/golang/golang-values.mk || true
           fi
 
-          # 重新 install，让符号链接指向新包
           ./scripts/feeds install -a -f -p packages 2>/dev/null || true
           ./scripts/feeds install -f golang golang1.27 2>/dev/null || true
 
           rm -rf "$TMP"
-          echo "→ golang 替换完成"
+          echo "→ golang 替换完成（snapshot 会跳过本步骤）"
 
       - name: Inject packages into SDK
         run: |
