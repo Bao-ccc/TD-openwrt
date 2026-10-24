@@ -42,6 +42,12 @@ define Package/$(PKG_NAME)/description
   API format translation, request tracing and provider load balancing.
 endef
 
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	# 强制把可能带 CRLF 的文件转成 LF，避免 patch 因行尾不一致失败
+	$(SED) 's/\r$$//' $(PKG_BUILD_DIR)/frontend/src/features/system/components/storage-policy-settings.tsx
+endef
+
 define Build/Compile
 	( \
 		set -e; \
