@@ -122,11 +122,11 @@
       "target": "."
     },
     {
-      "name": "luci-app-daebox",
+      "name": "luci-app-dae-box",
       "repo": "hhCodingCat/luci-app-dae-box",
       "ref": "main",
       "as_package": true,
-      "target": "luci-app-daebox",
+      "target": "luci-app-dae-box",
       "exclude": [
         ".github",
         ".gitignore"
@@ -695,10 +695,10 @@
       "note": "git-commit 型（PKG_SOURCE_PROTO:=git + PKG_SOURCE_VERSION=main）"
     },
     {
-      "name": "luci-app-daebox",
-      "makefile": "luci-app-daebox/Makefile",
+      "name": "luci-app-dae-box",
+      "makefile": "luci-app-dae-box/Makefile",
       "strategy": "notify",
-      "note": "luci.mk 型，由 luci-app-daebox 源码同步维护"
+      "note": "luci.mk 型，由 luci-app-dae-box 源码同步维护"
     }
   ]
 }
