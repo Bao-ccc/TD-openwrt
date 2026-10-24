@@ -1,13 +1,13 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=axonhub
-PKG_VERSION:=20261023
+PKG_VERSION:=20261024
 PKG_RELEASE:=1
-PKG_SOURCE_VERSION:=128e5d7f533e53923a2e439e230f2047d99a7203
+PKG_SOURCE_VERSION:=6c137e3162c20c4663437233ae3bf56f0724d7db
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_SOURCE_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/looplj/axonhub/tar.gz/$(PKG_SOURCE_VERSION)?
-PKG_HASH:=e342133e0c268bc6996686a0fb97bf2e55169786c965dfe4a7e0c12bf92a10a7
+PKG_HASH:=ddd105bcdab259df06376ee3a2c75f24a3fc83889e56ee8fecb66e5ba427676b
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_SOURCE_VERSION)
 
 PKG_LICENSE:=Apache-2.0 AND LGPL-3.0-only
@@ -40,13 +40,6 @@ endef
 define Package/$(PKG_NAME)/description
   AxonHub is an all-in-one AI gateway with an embedded management interface,
   API format translation, request tracing and provider load balancing.
-endef
-
-define Build/Prepare
-	$(PKG_UNPACK)
-	# 必须在打补丁之前把 CRLF 转成 LF
-	$(SED) 's/\r$$//' $(PKG_BUILD_DIR)/frontend/src/features/system/components/storage-policy-settings.tsx
-	$(call Build/Patch)
 endef
 
 define Build/Compile
