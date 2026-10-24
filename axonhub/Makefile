@@ -43,9 +43,10 @@ define Package/$(PKG_NAME)/description
 endef
 
 define Build/Prepare
-	$(call Build/Prepare/Default)
-	# 强制把可能带 CRLF 的文件转成 LF，避免 patch 因行尾不一致失败
+	$(PKG_UNPACK)
+	# 必须在打补丁之前把 CRLF 转成 LF
 	$(SED) 's/\r$$//' $(PKG_BUILD_DIR)/frontend/src/features/system/components/storage-policy-settings.tsx
+	$(call Build/Patch)
 endef
 
 define Build/Compile
