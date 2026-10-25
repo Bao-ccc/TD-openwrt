@@ -365,6 +365,40 @@ write_state() {
   printf '%s\n' "$payload" > "$file"
 }
 
+# 把目录树里的符号链接实体化（换成目标的真实副本）
+#
+# 为什么要这个：LuCI 的 luci.mk 生成 i18n 包时，**依赖 po/zh_Hans、po/zh_Hant
+# 这种符号链接**（语言表里只有 zh_Hans/zh_Hant，没有 zh-cn/zh-tw）。
+# 符号链接一旦在 zip 打包 / Windows 解压 / 某些文件系统里丢掉，
+# luci-i18n-<pkg>-zh-cn / zh-tw 就**彻底生成不出来**。
+# 实体化后功能与上游完全一致（luci.mk 读的是 po/zh_Hans/*.po，
+# 不管那是真目录还是符号链接），但不再依赖任何符号链接支持。
+dereference_links() {
+  local root="$1" l t target
+  [[ -d "$root" ]] || return 0
+  local links=()
+  mapfile -t links < <(find "$root" -type l 2>/dev/null | sort)
+  [[ ${#links[@]} -eq 0 ]] && return 0
+
+  for l in "${links[@]}"; do
+    t=$(readlink "$l")
+    case "$t" in
+      /*) target="$t" ;;
+      *)  target="$(dirname "$l")/$t" ;;
+    esac
+    # 解析成规范路径
+    target="$(cd "$(dirname "$target")" 2>/dev/null && pwd)/$(basename "$target")"
+
+    if [[ ! -e "$target" ]]; then
+      log "[源码]   ⚠️ 死链 $l -> $t，跳过"
+      continue
+    fi
+    rm -f "$l"
+    cp -a "$target" "$l"
+    log "[源码]   🔗 实体化 $l  ←  $t"
+  done
+}
+
 # 按 sources[].replace 列表改写目标目录里的 Makefile
 #   每项形如 "原串=>新串"，用 awk 做**字面量**替换（避免 sed 转义地狱）
 #   在同步后自动执行，所以上游更新不会把改名冲掉
@@ -590,8 +624,10 @@ sync_source() {
     #   包目录其实是 target；普通模式下 dst 就是包目录。
     if [[ "$as_pkg" == "true" ]]; then
       apply_replace "$target" "$idx"
+      [[ "$(cfg_get "$cfg" ".sources[$idx].dereference_symlinks" "true")" == "true" ]] && dereference_links "$target"
     else
       apply_replace "$dst" "$idx"
+      [[ "$(cfg_get "$cfg" ".sources[$idx].dereference_symlinks" "true")" == "true" ]] && dereference_links "$dst"
     fi
   done
   rm -rf "$work"
