@@ -110,7 +110,25 @@ bash update.sh --skip-source  # 只更新版本哈希
 | `mosdns` | `sbwml/luci-app-mosdns`@**`v5`** | `luci-app-mosdns/` `mosdns/` `geo2txt/` |
 | `luci-app-eqosplus` | `sirpdboy/luci-app-eqosplus` | **整个仓库** → `luci-app-eqosplus/`（`as_package` 模式） |
 | `dae-box` | `hhCodingCat/dae-box` | `openwrt/dae-box` → **`dae-box/`**（`src=>dst` 改名） |
-| `luci-app-daebox` | `hhCodingCat/luci-app-dae-box` | **整个仓库** → `luci-app-daebox/`（`as_package` 模式） |
+| `luci-app-dae-box` | `hhCodingCat/luci-app-dae-box` | **整个仓库** → `luci-app-dae-box/`（`as_package` + `replace` 改名） |
+
+> ⚠️ **目录名必须和 `PKG_NAME` 一致**，否则本地编译会“找不到包”——
+> OpenWrt 是**按 `PKG_NAME` 注册**的（`luci.mk` 用它定义 `Package/$(PKG_NAME)`），
+> `make menuconfig` 搜的是包名，不是目录名。
+>
+> 上游 `luci-app-dae-box` 的 Makefile 里写的是 `PKG_NAME:=luci-app-dae-box`，
+> 而目录叫 `luci-app-dae-box`（差一个连字符），搜 `luci-app-dae-box` 就是搜不到。
+> 现在用 `replace` 在同步后自动改写，**而且不会被后续上游同步冲掉**：
+>
+> ```json
+> { "name": "luci-app-dae-box",
+>   "repo": "hhCodingCat/luci-app-dae-box",
+>   "as_package": true, "target": "luci-app-dae-box",
+>   "replace": ["PKG_NAME:=luci-app-dae-box=>PKG_NAME:=luci-app-dae-box"] }
+> ```
+>
+> 同步日志会打一行确认：
+> `✏️ luci-app-dae-box/Makefile  「PKG_NAME:=luci-app-dae-box」⇒「PKG_NAME:=luci-app-dae-box」`
 
 > **`sing-box` 取自 `VIKINGYFY/packages`**（`passwall-packages` 的 `sing-box` 已加进 `exclude`）。
 > VIKINGYFY 的版本用 `PKG_UPSTREAM_VERSION` 承载（`PKG_VERSION` 由 `$(subst)` 派生），
@@ -133,6 +151,7 @@ bash update.sh --skip-source  # 只更新版本哈希
 | `repo` | — | 上游仓库 `owner/repo` |
 | `ref` | `main` | 分支 / tag / commit |
 | `dirs` | `["*"]` | 要拷贝的条目；`"*"` = 顶层全部；支持 **`"src=>dst"`** 改名（上游包嵌套在子目录时用） |
+| **`replace`** | `[]` | **同步后改写 Makefile**，每项 `"原串=>新串"`（字面量替换） |
 | `exclude` | `[]` | `dirs` 含 `"*"` 时排除的条目 |
 | `target` | `.` | 落地目录（`.` = 仓库根目录） |
 | `as_package` | `false` | **上游整棵树就是一个包**，全部落到 `target` 目录内（先清空再拷） |

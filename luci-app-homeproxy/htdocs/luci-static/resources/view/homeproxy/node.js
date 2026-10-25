@@ -1698,7 +1698,27 @@ return view.extend({
 		this.node_latency_row_state = node_latency_row_state;
 
 		/* Cache subscription information, it will be called multiple times */
-		const subinfo = hp.getSubscriptionGroups(data[0]);
+		let subinfo = [], seen_subscriptions = {};
+		for (let suburl of (uci.get(data[0], 'subscription', 'subscription_url') || [])) {
+			const urlhash = hp.calcStringMD5(suburl.replace(/#.*$/, ''));
+			if (seen_subscriptions[urlhash])
+				continue;
+			seen_subscriptions[urlhash] = true;
+			let title = suburl;
+			try {
+				const url = new URL(suburl);
+				if (url.hash) {
+					try {
+						title = decodeURIComponent(url.hash.slice(1));
+					} catch (e) {
+						title = url.hash.slice(1);
+					}
+				} else {
+					title = url.hostname;
+				}
+			} catch (e) { }
+			subinfo.push({ 'hash': urlhash, 'title': title });
+		}
 
 		m = new form.Map('homeproxy', _('Edit Nodes'));
 		const saveMap = m.save;
