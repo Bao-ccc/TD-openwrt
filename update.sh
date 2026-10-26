@@ -293,11 +293,9 @@ should_skip_sync() {
 
 # 源码同步的版本闸门（多版本变量）
 #   比较两个 Makefile 里一组版本变量（如 PKG_VERSION / GEOIP_VER / GEOSITE_VER）：
-#     · 任一上游值严格更新      → 同步
-#     · 全部相等                → **同步**（上游可能只提交了代码没改版本号，
-#                                  如 Openwrt-Passwall 只 push 不发 release）；
-#                                  浪不浪费下载由 sync_source 的 commit-SHA 检查把关
-#     · 上游确实落后（降级）    → 忽略，避免把本地抬上去的版本冲回旧版
+#     · 只要有一个上游值严格更新 → 同步
+#     · 所有可比变量都不更高 → 忽略
+#     · 一个可比的都没有 → 同步（无法判定时保守放行）
 #   should_skip_source <上游Makefile> <本地Makefile> <gate> <变量列表,换行分隔>
 #   返回 0=应忽略  1=应同步
 should_skip_source() {
@@ -305,7 +303,7 @@ should_skip_source() {
   if [[ "$gate" != "true" ]]; then return 1; fi
   if [[ ! -f "$upfile" || ! -f "$locfile" ]]; then return 1; fi
 
-  local compared=0 newer=0 older=0 v uv lv
+  local compared=0 newer=0 v uv lv
   while IFS= read -r v; do
     [[ -z "$v" ]] && continue
     uv=$(read_var_line "$upfile" "$v")
@@ -314,14 +312,12 @@ should_skip_source() {
     is_literal_ver "$uv" || continue
     is_literal_ver "$lv" || continue
     compared=$((compared + 1))
-    if is_newer "$uv" "$lv"; then newer=$((newer + 1)); continue; fi
-    if is_newer "$lv" "$uv"; then older=$((older + 1)); fi
+    if is_newer "$uv" "$lv"; then newer=$((newer + 1)); fi
   done <<< "$vars"
 
-  if [[ "$compared" -eq 0 ]]; then return 1; fi   # 无可比变量 → 放行
-  if [[ "$newer" -gt 0 ]]; then return 1; fi      # 有更新 → 同步
-  if [[ "$older" -eq 0 ]]; then return 1; fi      # 全相等 → 同步（可能有代码改动）
-  return 0                                        # 上游落后 → 忽略，防降级
+  if [[ "$compared" -eq 0 ]]; then return 1; fi
+  if [[ "$newer" -gt 0 ]]; then return 1; fi
+  return 0
 }
 
 # 用字面量 anchor 定位块，替换其后第一条 <hash_var>:= 行
@@ -363,69 +359,6 @@ replace_line_after_anchor() {
 write_state() {
   local file="$1" payload="$2"
   printf '%s\n' "$payload" > "$file"
-}
-
-# 把目录树里的符号链接实体化（换成目标的真实副本）
-#
-# 为什么要这个：LuCI 的 luci.mk 生成 i18n 包时，**依赖 po/zh_Hans、po/zh_Hant
-# 这种符号链接**（语言表里只有 zh_Hans/zh_Hant，没有 zh-cn/zh-tw）。
-# 符号链接一旦在 zip 打包 / Windows 解压 / 某些文件系统里丢掉，
-# luci-i18n-<pkg>-zh-cn / zh-tw 就**彻底生成不出来**。
-# 实体化后功能与上游完全一致（luci.mk 读的是 po/zh_Hans/*.po，
-# 不管那是真目录还是符号链接），但不再依赖任何符号链接支持。
-dereference_links() {
-  local root="$1" l t target
-  [[ -d "$root" ]] || return 0
-  local links=()
-  mapfile -t links < <(find "$root" -type l 2>/dev/null | sort)
-  [[ ${#links[@]} -eq 0 ]] && return 0
-
-  for l in "${links[@]}"; do
-    t=$(readlink "$l")
-    case "$t" in
-      /*) target="$t" ;;
-      *)  target="$(dirname "$l")/$t" ;;
-    esac
-    # 解析成规范路径
-    target="$(cd "$(dirname "$target")" 2>/dev/null && pwd)/$(basename "$target")"
-
-    if [[ ! -e "$target" ]]; then
-      log "[源码]   ⚠️ 死链 $l -> $t，跳过"
-      continue
-    fi
-    rm -f "$l"
-    cp -a "$target" "$l"
-    log "[源码]   🔗 实体化 $l  ←  $t"
-  done
-}
-
-# 按 sources[].replace 列表改写目标目录里的 Makefile
-#   每项形如 "原串=>新串"，用 awk 做**字面量**替换（避免 sed 转义地狱）
-#   在同步后自动执行，所以上游更新不会把改名冲掉
-apply_replace() {
-  local dst="$1" idx="$2"
-  local mk="$dst/Makefile"
-  [[ -f "$mk" ]] || return 0
-  local n i k v
-  n=$(jq -r ".sources[$idx].replace // [] | length" "$CONFIG_FILE" 2>/dev/null || echo 0)
-  [[ "$n" -gt 0 ]] || return 0
-  for ((i = 0; i < n; i++)); do
-    k=$(jq -r ".sources[$idx].replace[$i] | split(\"=>\") | .[0]" "$CONFIG_FILE" 2>/dev/null)
-    v=$(jq -r ".sources[$idx].replace[$i] | split(\"=>\") | .[1] // \"\"" "$CONFIG_FILE" 2>/dev/null)
-    [[ -n "$k" ]] || continue
-    if grep -qF "$k" "$mk"; then
-      awk -v k="$k" -v v="$v" '{
-        line = $0
-        out = ""
-        while ((p = index(line, k)) > 0) {
-          out = out substr(line, 1, p-1) v
-          line = substr(line, p + length(k))
-        }
-        print out line
-      }' "$mk" > "$mk.tmp" && mv "$mk.tmp" "$mk"
-      log "[源码]   ✏️ $(basename "$dst")/Makefile  「${k}」⇒「${v}」"
-    fi
-  done
 }
 
 # ============================================================================
@@ -617,18 +550,6 @@ sync_source() {
     copied+=("$dname")
     changed=1
     log "[源码] 已同步 ${dst}${it:+  (来自 ${it})}"
-
-    # 同步后改写 Makefile（如把上游 PKG_NAME 改成跟本地目录一致，
-    # 否则 OpenWrt 按 PKG_NAME 注册，搜目录名会找不到）
-    #   注意：as_package 模式下 dst 是单个条目（可能是 Makefile 本身），
-    #   包目录其实是 target；普通模式下 dst 就是包目录。
-    if [[ "$as_pkg" == "true" ]]; then
-      apply_replace "$target" "$idx"
-      [[ "$(cfg_get "$cfg" ".sources[$idx].dereference_symlinks" "true")" == "true" ]] && dereference_links "$target"
-    else
-      apply_replace "$dst" "$idx"
-      [[ "$(cfg_get "$cfg" ".sources[$idx].dereference_symlinks" "true")" == "true" ]] && dereference_links "$dst"
-    fi
   done
   rm -rf "$work"
 
