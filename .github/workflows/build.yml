@@ -96,7 +96,7 @@ on:
       exclude:
         description: "默认不编译的包（空格/逗号分隔）。在 plugin 下拉里点名、或 custom 里写包名时不受此限"
         type: string
-        default: "axonhub luci-app-axonhub"
+        default: "axonhub luci-app-axonhub dae-box luci-app-dae-box"
 
       upload_all:
         description: "上传全部产物（含 -dbg / -dev），否则只上传主包"
