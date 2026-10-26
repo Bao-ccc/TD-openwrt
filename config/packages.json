@@ -130,6 +130,9 @@
       "exclude": [
         ".github",
         ".gitignore"
+      ],
+      "replace": [
+        "PKG_NAME:=luci-app-dae-box=>PKG_NAME:=luci-app-dae-box"
       ]
     }
   ],
@@ -621,6 +624,18 @@
       "makefile": "luci-app-homeproxy/Makefile",
       "strategy": "notify",
       "note": "由 vikingyfy-packages 源码同步维护"
+    },
+    {
+      "name": "luci-app-passwall",
+      "makefile": "luci-app-passwall/Makefile",
+      "strategy": "notify",
+      "note": "luci.mk 型（无源码下载），由 luci-app-passwall 源码同步维护"
+    },
+    {
+      "name": "luci-app-passwall2",
+      "makefile": "luci-app-passwall2/Makefile",
+      "strategy": "notify",
+      "note": "luci.mk 型（无源码下载），由 luci-app-passwall2 源码同步维护"
     },
     {
       "name": "luci-app-wolultra",
