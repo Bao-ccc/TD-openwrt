@@ -134,6 +134,41 @@
       "replace": [
         "PKG_NAME:=luci-app-dae-box=>PKG_NAME:=luci-app-dae-box"
       ]
+    },
+    {
+      "name": "luci-app-argon-config",
+      "repo": "jerrykuku/luci-app-argon-config",
+      "ref": "master",
+      "as_package": true,
+      "target": "luci-app-argon-config",
+      "exclude": [
+        ".github",
+        ".gitignore",
+        "LICENSE",
+        "README.md",
+        "README_ZH.md",
+        "tests"
+      ]
+    },
+    {
+      "name": "luci-theme-argon",
+      "repo": "jerrykuku/luci-theme-argon",
+      "ref": "master",
+      "as_package": true,
+      "target": "luci-theme-argon",
+      "exclude": [
+        ".github",
+        ".gitignore",
+        "LICENSE",
+        "README.md",
+        "README_ZH.md",
+        "RELEASE.md",
+        "RELEASE_ZH.md",
+        "Screenshots",
+        "docs",
+        "less",
+        "tests"
+      ]
     }
   ],
   "packages": [
@@ -714,6 +749,24 @@
       "makefile": "luci-app-dae-box/Makefile",
       "strategy": "notify",
       "note": "luci.mk 型，由 luci-app-dae-box 源码同步维护"
+    },
+    {
+      "name": "luci-app-argon-config",
+      "makefile": "luci-app-argon-config/Makefile",
+      "strategy": "notify",
+      "note": "luci.mk 型，由 jerrykuku/luci-app-argon-config 源码同步维护"
+    },
+    {
+      "name": "luci-theme-argon",
+      "makefile": "luci-theme-argon/Makefile",
+      "strategy": "notify",
+      "note": "luci.mk 型，由 jerrykuku/luci-theme-argon 源码同步维护"
+    },
+    {
+      "name": "luci-app-netdevices",
+      "makefile": "luci-app-netdevices/Makefile",
+      "strategy": "notify",
+      "note": "自研 LuCI 插件（在线设备 + 静态地址），本仓库维护"
     }
   ]
 }
