@@ -144,10 +144,8 @@
       "exclude": [
         ".github",
         ".gitignore",
-        "LICENSE",
         "README.md",
-        "README_ZH.md",
-        "tests"
+        "README_ZH.md"
       ]
     },
     {
@@ -159,15 +157,10 @@
       "exclude": [
         ".github",
         ".gitignore",
-        "LICENSE",
         "README.md",
         "README_ZH.md",
         "RELEASE.md",
-        "RELEASE_ZH.md",
-        "Screenshots",
-        "docs",
-        "less",
-        "tests"
+        "RELEASE_ZH.md"
       ]
     }
   ],
