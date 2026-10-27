@@ -505,7 +505,7 @@ jobs:
           else
             echo "  ✅ 扫描路径里只剩本仓库的 sing-box"
           fi
-          ls -ld package/sing-box 2>/dev/null | sed 's/^/  本仓库 → /'
+          ls -ld package/sing-box 2>/dev/null | sed 's/^/  本仓库 → /' || true
 
           echo ""
           echo "→ 通用校验：注入的每个包只应存在一份"
