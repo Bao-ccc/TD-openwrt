@@ -1,0 +1,361 @@
+# =============================================================================
+# Adopted 2026-10-29 after review (first firmware workflow, practice phase).
+#
+# Path in repo:
+#   .github/workflows/firmware.yml  in  Bao-ccc/TD-openwrt
+#
+# What it does:
+#   Builds ONE sysupgrade-compatible firmware image for x86/64 from
+#   OpenWrt snapshot (main branch) plus the TD feed as an extra feed,
+#   and uploads the image as a GitHub Actions artifact.
+#
+# What it deliberately does NOT do:
+#   - No flashing, no machine testing, no USB writing.
+#   - No network configuration is baked in: the image boots with
+#     OpenWrt defaults (LAN 192.168.1.1, DHCP WAN). The user's
+#     interface map (LAN br-lan/eth0 10.0.0.1/24, WAN pppoe-wan/eth1,
+#     wan_6 + wan6) and all MosDNS/Passwall service settings are
+#     first-boot configuration work, NOT part of this build.
+#   - No PPPoE credentials anywhere in this file, ever. The user
+#     fills those in himself on the device.
+#   - No Docker (later phase; needs disk/overlay expansion first).
+#   - No upload to GitHub Releases (artifact only, practice phase).
+#
+# Baseline this draft implements (fixed 2026-10-29):
+#   OpenWrt snapshot (main) / target x86/64 / squashfs-combined-efi.
+#   Passwall on by default, Nikki installed as backup (default off),
+#   MosDNS; Passwall2 and HomeProxy already removed from the feed.
+#   No smartdns (upstream default exclusion, confirmed by the feed
+#   author 2026-10-29).
+#
+# Why a full source build (not the .apk set):
+#   The existing build.yml compiles .apk packages with an SDK. A
+#   firmware image needs a full OpenWrt source tree; building the
+#   image from source with the TD feed means firmware and packages
+#   are the SAME batch — the gold standard the 2026-10-29 plan calls
+#   for (installing an .apk set later can never match it exactly).
+#
+# Snapshot drift warning:
+#   "main" moves daily. The exact OpenWrt HEAD sha is printed into
+#   the job summary on every run; a rebuild a week later is a
+#   DIFFERENT snapshot and must be re-verified, never assumed equal.
+# =============================================================================
+
+name: Build Firmware (x86/64, snapshot)
+
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_ref:
+        description: "OpenWrt source ref (branch, tag or commit; snapshot = main)"
+        type: string
+        default: "main"
+      td_ref:
+        description: "TD feed ref (branch, tag or commit)"
+        type: string
+        default: "main"
+      use_cache:
+        description: "Reuse dl/ccache/Go caches (uncheck for a fully cold build)"
+        type: boolean
+        default: true
+
+permissions:
+  # Artifact upload needs nothing more than read here.
+  contents: read
+
+# Never run two multi-hour firmware builds at once; a re-trigger
+# queues behind the running one instead of cancelling it.
+concurrency:
+  group: firmware-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Pinned, not ubuntu-latest: the package workflow already hit
+    # runner-image migration warnings on ubuntu-latest.
+    runs-on: ubuntu-24.04
+    # 360 minutes is the maximum job time on free GitHub runners.
+    # A cold x86/64 build is expected at 3-5h; this is tight by
+    # design, see the timeout discussion in the design note.
+    timeout-minutes: 360
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      OW_REF: ${{ inputs.openwrt_ref }}
+      TD_REF: ${{ inputs.td_ref }}
+
+    steps:
+      - name: Checkout TD feed (workflow repo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Free disk space
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost \
+            /usr/local/lib/android /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+          sudo docker system prune -af 2>/dev/null || true
+          sudo apt-get clean
+          echo "--- after cleanup ---"
+          df -h
+
+      # naiveproxy (Chromium-derived) plus parallel Go links can spike
+      # RAM on a 16 GB runner; 4 GB of swap is cheap insurance.
+      - name: Add swap
+        run: |
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
+      # Apt list = the existing build.yml list (proven on this repo)
+      # plus swig (full source build) and ccache (compiler cache).
+      # python3-setuptools (not python3-distutils) is the Ubuntu 24.04
+      # variant per the OpenWrt build-system docs.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+            gettext git libncurses-dev libssl-dev libelf-dev swig \
+            python3 python3-setuptools python3-pyelftools \
+            rsync unzip zlib1g-dev file wget zstd curl jq ccache
+          # Cap the compiler cache so the repo-wide 10 GB cache quota
+          # is not eaten by ccache alone.
+          ccache -M 2G
+          ccache -z || true
+
+      - name: Clone OpenWrt snapshot
+        run: |
+          git clone --depth 1 --branch "$OW_REF" \
+            https://github.com/openwrt/openwrt.git openwrt
+          cd openwrt
+          echo "OpenWrt HEAD: $(git rev-parse HEAD)"
+          echo "OpenWrt HEAD: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+      # NOTE: this step runs AFTER the clone on purpose. actions/cache
+      # restores into openwrt/dl; cloning into an already-restored
+      # directory would fail, so clone first, restore second.
+      - name: Restore caches (dl, ccache, Go)
+        if: inputs.use_cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            openwrt/dl
+            ~/.ccache
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          # Static key is intentional: dl/ is content-addressed by
+          # filename+hash, and ccache invalidates itself. The cache
+          # saves in the post-job phase, so even a timed-out run
+          # usually leaves a warmer cache for the retry.
+          key: firmware-cache-${{ runner.os }}-v1
+          restore-keys: |
+            firmware-cache-${{ runner.os }}-
+
+      # TD is PREPENDED (not appended): scripts/feeds uses the first
+      # feed that provides a package, so TD versions win over base
+      # feed duplicates (mosdns and friends). The ";branch" suffix
+      # is standard feeds syntax for pinning a ref.
+      - name: Add TD feed
+        run: |
+          cd openwrt
+          sed -i "1i src-git TD https://github.com/Bao-ccc/TD-openwrt.git;${TD_REF}" feeds.conf.default
+          head -5 feeds.conf.default
+          # Alternative if the ";ref" syntax ever proves problematic:
+          # use the workflow's own checkout as a local feed instead:
+          #   echo "src-link TD $GITHUB_WORKSPACE" >> feeds.conf.default
+          # (then the feed content is exactly the workflow's commit).
+
+      - name: Update and install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          # Record the exact TD commit actually used (src-git feeds
+          # are cloned under feeds/<name>/).
+          git -C feeds/TD rev-parse HEAD 2>/dev/null || echo "TD feed commit: unknown"
+
+      # Optional first-boot customization hook. Today the repo has no
+      # files/ directory, so this is a no-op; when uci-defaults
+      # scripts (theme, service defaults, interface map) are validated
+      # later, they go in the repo's files/ and are picked up here
+      # with no workflow change. NEVER put PPPoE credentials in files/.
+      - name: Copy files/ overlay if present
+        run: |
+          if [ -d files ]; then
+            cp -r files openwrt/files
+            echo "files/ overlay copied"
+          else
+            echo "no files/ overlay, building with defaults"
+          fi
+
+      # The .config fragment below is the whole product definition.
+      # make defconfig resolves dependencies, settles conflicts
+      # (e.g. dnsmasq-full replaces dnsmasq) and DROPS unknown symbols
+      # with warnings instead of failing — that drop behaviour is what
+      # makes the best-effort service names below safe. The next step
+      # turns silent drops of CORE packages into a fast failure.
+      - name: Write .config fragment and defconfig
+        run: |
+          cd openwrt
+          cat > .config <<'EOF'
+          # --- target: x86/64 generic ---
+          CONFIG_TARGET_x86=y
+          CONFIG_TARGET_x86_64=y
+          CONFIG_TARGET_x86_64_DEVICE_generic=y
+          # --- image: squashfs, gzipped; the x86 image Makefile emits
+          # the combined-efi variant for the generic profile (checked
+          # again in the post-build verification step) ---
+          CONFIG_TARGET_ROOTFS_SQUASHFS=y
+          CONFIG_TARGET_IMAGES_GZIP=y
+          # Rootfs partition: proxy cores + LuCI + services exceed the
+          # ~104 MB x86 default by a wide margin. 1024 MB leaves
+          # headroom; disk/overlay expansion is a later, separate phase.
+          CONFIG_TARGET_ROOTFS_PARTSIZE=1024
+          # Compiler cache (dropped harmlessly by defconfig if the
+          # symbol ever changes; the build still works, just slower).
+          CONFIG_CCACHE=y
+          # --- LuCI base ---
+          CONFIG_PACKAGE_luci=y
+          CONFIG_PACKAGE_luci-theme-argon=y
+          CONFIG_PACKAGE_luci-app-firewall=y
+          CONFIG_PACKAGE_dnsmasq-full=y
+          # --- Passwall group (upstream-default set, NO smartdns) ---
+          CONFIG_PACKAGE_luci-app-passwall=y
+          CONFIG_PACKAGE_xray-core=y
+          CONFIG_PACKAGE_xray-plugin=y
+          CONFIG_PACKAGE_v2ray-plugin=y
+          CONFIG_PACKAGE_sing-box=y
+          CONFIG_PACKAGE_hysteria=y
+          CONFIG_PACKAGE_shadowsocksr-libev=y
+          CONFIG_PACKAGE_naiveproxy=y
+          CONFIG_PACKAGE_chinadns-ng=y
+          CONFIG_PACKAGE_dns2socks=y
+          CONFIG_PACKAGE_geoview=y
+          CONFIG_PACKAGE_microsocks=y
+          CONFIG_PACKAGE_tcping=y
+          CONFIG_PACKAGE_simple-obfs=y
+          CONFIG_PACKAGE_ipt2socks=y
+          # NOTE: v2ray-geodata is an umbrella name only and never
+          # produces a package; its real outputs are the two data
+          # sub-packages below (geoip.dat / geosite.dat). Selecting
+          # the umbrella name would silently do nothing.
+          CONFIG_PACKAGE_v2ray-geoip=y
+          CONFIG_PACKAGE_v2ray-geosite=y
+          # --- Nikki group (installed as backup, default off is a
+          # first-boot service setting, not a build-time option) ---
+          CONFIG_PACKAGE_luci-app-nikki=y
+          CONFIG_PACKAGE_nikki=y
+          CONFIG_PACKAGE_mihomo-meta=y
+          # --- MosDNS group ---
+          CONFIG_PACKAGE_luci-app-mosdns=y
+          CONFIG_PACKAGE_mosdns=y
+          CONFIG_PACKAGE_geo2txt=y
+          # --- Other current services (best-effort names; defconfig
+          # drops any that do not exist in the enabled feeds and the
+          # verification step reports them as warnings, not failures.
+          # Exact names must be checked against the running router's
+          # installed package list before the first real build.) ---
+          CONFIG_PACKAGE_banip=y
+          CONFIG_PACKAGE_luci-app-banip=y
+          CONFIG_PACKAGE_luci-app-upnp=y
+          CONFIG_PACKAGE_miniupnpd=y
+          CONFIG_PACKAGE_luci-app-ttyd=y
+          CONFIG_PACKAGE_luci-app-samba4=y
+          CONFIG_PACKAGE_luci-app-eqosplus=y
+          CONFIG_PACKAGE_luci-app-openlist=y
+          EOF
+          make defconfig
+          echo "--- target + key packages after defconfig ---"
+          grep -E '^(CONFIG_TARGET_x86|CONFIG_TARGET_ROOTFS|CONFIG_PACKAGE_(luci|luci-app-passwall|luci-app-nikki|luci-app-mosdns|nikki|mosdns|mihomo-meta|xray-core|sing-box|hysteria))' .config || true
+
+      # Fail fast in minute 5, not hour 4: if a CORE package was
+      # dropped by defconfig (wrong name, missing feed, conflict),
+      # stop now with a readable list instead of building an image
+      # that silently lacks it. Dependencies auto-select (e.g.
+      # luci-app-mosdns pulls v2ray-geoip/geosite, luci-app-nikki
+      # pulls nikki, nikki pulls mihomo), so core checks also cover
+      # the dependency chains.
+      - name: Verify .config selections
+        run: |
+          cd openwrt
+          CORE="luci luci-theme-argon luci-app-passwall luci-app-nikki luci-app-mosdns \
+            nikki mosdns mihomo-meta xray-core xray-plugin v2ray-plugin sing-box hysteria \
+            chinadns-ng dns2socks v2ray-geoip v2ray-geosite geo2txt dnsmasq-full"
+          MISS=""
+          for p in $CORE; do
+            grep -q "^CONFIG_PACKAGE_${p}=y$" .config || MISS="$MISS $p"
+          done
+          grep -q '^CONFIG_TARGET_x86_64_DEVICE_generic=y$' .config || MISS="$MISS TARGET_x86_64_DEVICE_generic"
+          if [ -n "$MISS" ]; then
+            echo "::error::Missing after defconfig:$MISS"
+            exit 1
+          fi
+          echo "core packages: all present"
+          # Split sub-packages and best-effort services: warn only.
+          # (simple-obfs and shadowsocksr-libev split into sub-package
+          # symbols; a dropped parent name here is not fatal.)
+          for p in simple-obfs simple-obfs-client simple-obfs-server \
+            shadowsocksr-libev shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-server \
+            shadowsocksr-libev-ssr-redir shadowsocksr-libev-ssr-nat shadowsocksr-libev-ssr-check \
+            sing-box-tiny naiveproxy geoview microsocks tcping ipt2socks \
+            banip luci-app-banip luci-app-upnp miniupnpd luci-app-ttyd \
+            luci-app-samba4 luci-app-eqosplus luci-app-openlist luci-app-firewall; do
+            grep -q "^CONFIG_PACKAGE_${p}=y$" .config || echo "::warning::Dropped or unknown package: $p"
+          done
+
+      # Download everything first: failures surface here, and a warm
+      # dl/ cache makes the next run much faster.
+      - name: Pre-download sources
+        run: |
+          cd openwrt
+          make download -j"$(nproc)"
+
+      # Plain make (no V=s): a full verbose log for this package set
+      # would be gigabytes (luci-app-passwall alone logged 35 MB in
+      # the package builds). Debugging a failure: re-run the failing
+      # package locally with V=s, or temporarily switch this step to
+      # "make -j1 V=s" on a retry.
+      - name: Build firmware image
+        run: |
+          cd openwrt
+          make -j"$(nproc)"
+          echo "--- produced images ---"
+          ls -lh bin/targets/x86/64/
+
+      # The deliverable is exactly this file. If the efi variant was
+      # not produced (wrong target config, image Makefile change),
+      # fail here rather than uploading the wrong image.
+      - name: Verify EFI image exists
+        run: |
+          cd openwrt
+          ls bin/targets/x86/64/*squashfs-combined-efi.img.gz
+          ls -lh bin/targets/x86/64/*squashfs-combined-efi.img.gz
+          grep -E 'combined-efi' bin/targets/x86/64/sha256sums || true
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-firmware-x86-64-snapshot
+          path: |
+            openwrt/bin/targets/x86/64/*squashfs-combined-efi.img.gz
+            openwrt/bin/targets/x86/64/sha256sums
+            openwrt/bin/targets/x86/64/config.buildinfo
+            openwrt/bin/targets/x86/64/feeds.buildinfo
+            openwrt/.config
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Firmware build"
+            echo "- OpenWrt ref: $OW_REF"
+            echo "- TD feed ref: $TD_REF"
+            echo "- Target: x86/64, image: squashfs-combined-efi"
+            echo "- Produced files:"
+            ls -lh openwrt/bin/targets/x86/64/ 2>/dev/null | head -30 || true
+          } >> "$GITHUB_STEP_SUMMARY"
