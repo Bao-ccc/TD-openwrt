@@ -103,12 +103,17 @@ jobs:
       # RAM on a 16 GB runner; 4 GB of swap is cheap insurance.
       - name: Add swap
         run: |
+          if swapon --show | grep -q .; then
+            echo "swap already active, skipping"
+        else
+          sudo swapoff /swapfile 2>/dev/null || true
+          sudo rm -f /swapfile
           sudo fallocate -l 4G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          free -h
-
+      fi
+      free -h
       # Apt list = the existing build.yml list (proven on this repo)
       # plus swig (full source build) and ccache (compiler cache).
       # python3-setuptools (not python3-distutils) is the Ubuntu 24.04
