@@ -105,15 +105,16 @@ jobs:
         run: |
           if swapon --show | grep -q .; then
             echo "swap already active, skipping"
-        else
+            else
           sudo swapoff /swapfile 2>/dev/null || true
           sudo rm -f /swapfile
           sudo fallocate -l 4G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-      fi
-      free -h
+            fi
+            free -h
+
       # Apt list = the existing build.yml list (proven on this repo)
       # plus swig (full source build) and ccache (compiler cache).
       # python3-setuptools (not python3-distutils) is the Ubuntu 24.04
@@ -192,9 +193,9 @@ jobs:
           if [ -d files ]; then
             cp -r files openwrt/files
             echo "files/ overlay copied"
-          else
+            else
             echo "no files/ overlay, building with defaults"
-          fi
+            fi
 
       # The .config fragment below is the whole product definition.
       # make defconfig resolves dependencies, settles conflicts
@@ -297,7 +298,7 @@ jobs:
           if [ -n "$MISS" ]; then
             echo "::error::Missing after defconfig:$MISS"
             exit 1
-          fi
+            fi
           echo "core packages: all present"
           # Split sub-packages and best-effort services: warn only.
           # (simple-obfs and shadowsocksr-libev split into sub-package
