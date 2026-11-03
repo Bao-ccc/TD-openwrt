@@ -1,0 +1,52 @@
+name: Upload firmware to Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag"
+        type: string
+        default: "firmware-2026-10-30"
+      run_id:
+        description: "Source run ID holding the artifact"
+        type: string
+        default: "40982382779"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Download run #3 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openwrt-firmware-x86-64-snapshot
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifact
+      - name: Flatten downloaded files
+        run: |
+          mkdir -p flat
+          find artifact -type f -exec cp {} flat/ \;
+          ls -lh flat/
+      - name: Upload files to the draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: 固件 x86/64 snapshot 2026-10-30
+          body: |
+            第一次完整固件镜像（练手交付），由 GitHub Actions 运行 #3（2026-10-30）编出。
+            - OpenWrt snapshot main，HEAD 5700101d7c85381889d890dc1d3d001d0b4b6446
+            - TD feed：Bao-ccc/TD-openwrt main @ 4bd1b2e
+            - 目标：x86/64 generic，镜像 squashfs-combined-efi
+            - Passwall 默认开，Nikki 已装作备用（默认关），MosDNS；无 smartdns
+            - 镜像以 OpenWrt 默认启动（LAN 192.168.1.1，DHCP WAN）；接口映射与 MosDNS/Passwall 设置是首启配置，不在镜像里；不含任何 PPPoE 账号
+            - 附件：EFI 镜像（.img.gz）、sha256sums、config.buildinfo、feeds.buildinfo（.config 不在产物中，故未附）
+          files: |
+            flat/*
+          draft: true
+          prerelease: false
