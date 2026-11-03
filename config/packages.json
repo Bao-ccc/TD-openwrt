@@ -11,16 +11,6 @@
       "skip_if_not_newer": false
     },
     {
-      "name": "luci-app-passwall2",
-      "repo": "Openwrt-Passwall/openwrt-passwall2",
-      "ref": "main",
-      "dirs": [
-        "luci-app-passwall2"
-      ],
-      "target": ".",
-      "skip_if_not_newer": false
-    },
-    {
       "name": "passwall-packages",
       "repo": "Openwrt-Passwall/openwrt-passwall-packages",
       "ref": "main",
@@ -637,22 +627,10 @@
       "version_regex": "^gecoosac-(.+)$"
     },
     {
-      "name": "luci-app-homeproxy",
-      "makefile": "luci-app-homeproxy/Makefile",
-      "strategy": "notify",
-      "note": "由 vikingyfy-packages 源码同步维护"
-    },
-    {
       "name": "luci-app-passwall",
       "makefile": "luci-app-passwall/Makefile",
       "strategy": "notify",
       "note": "luci.mk 型（无源码下载），由 luci-app-passwall 源码同步维护"
-    },
-    {
-      "name": "luci-app-passwall2",
-      "makefile": "luci-app-passwall2/Makefile",
-      "strategy": "notify",
-      "note": "luci.mk 型（无源码下载），由 luci-app-passwall2 源码同步维护"
     },
     {
       "name": "luci-app-wolultra",
