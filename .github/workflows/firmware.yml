@@ -134,6 +134,18 @@ jobs:
           ccache -M 2G
           ccache -z || true
 
+      # axonhub's frontend needs Node.js + pnpm (its Makefile runs
+      # pnpm install / pnpm run build). The package-build workflow
+      # installs these on the runner for the same reason; the firmware
+      # build must do the same — run #7 failed on axonhub without them.
+      - name: Install Node.js and pnpm (for axonhub frontend)
+        run: |
+          sudo apt-get install -y -qq nodejs npm
+          sudo npm install -g pnpm
+          echo "  node  : $(node -v)"
+          echo "  npm   : $(npm -v)"
+          echo "  pnpm  : $(pnpm -v)"
+
       - name: Clone OpenWrt snapshot
         run: |
           git clone --depth 1 --branch "$OW_REF" \
@@ -377,6 +389,21 @@ jobs:
           make -j"$(nproc)"
           echo "--- produced images ---"
           ls -lh bin/targets/x86/64/
+
+      # If the build failed, re-run just axonhub verbosely so the real
+      # error lands in the log (the main build runs without V=s to keep
+      # the log small). Only when the toolchain was actually built;
+      # otherwise the failure was before the build step and there is
+      # nothing to diagnose here.
+      - name: Diagnose failed package (verbose, axonhub only)
+        if: failure()
+        run: |
+          cd openwrt
+          if ls -d staging_dir/toolchain-* >/dev/null 2>&1; then
+            make package/feeds/TD/axonhub/compile V=s || true
+          else
+            echo "toolchain not built; failure was before the build step"
+          fi
 
       # The deliverable is exactly this file. If the efi variant was
       # not produced (wrong target config, image Makefile change),
