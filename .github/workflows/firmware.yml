@@ -290,6 +290,17 @@ jobs:
           # on reboot unless persistence is added later.
           CONFIG_PACKAGE_luci-app-statistics=y
           CONFIG_PACKAGE_collectd=y
+          # --- AxonHub AI gateway (2026-11-06, user picked) ---
+          # Feed package looplj/axonhub (Go + embedded web UI, SQLite
+          # logs with 1-day cleanup). LuCI app manages it; default
+          # config has it DISABLED (enabled '0') and port 'auto' —
+          # enable in LuCI after first boot, the LuCI page shows the
+          # port. Deps (auto-selected; listed for clarity): ca-bundle
+          # (already in CORE) + zoneinfo-core + zoneinfo-asia.
+          CONFIG_PACKAGE_axonhub=y
+          CONFIG_PACKAGE_luci-app-axonhub=y
+          CONFIG_PACKAGE_zoneinfo-core=y
+          CONFIG_PACKAGE_zoneinfo-asia=y
           # --- Other current services (best-effort names; defconfig
           # drops any that do not exist in the enabled feeds and the
           # verification step reports them as warnings, not failures.
@@ -323,7 +334,8 @@ jobs:
             chinadns-ng dns2socks v2ray-geoip v2ray-geosite geo2txt dnsmasq-full \
             luci-app-sqm sqm-scripts luci-app-ddns ddns-scripts ddns-scripts-cloudflare \
             luci-proto-wireguard wireguard-tools kmod-wireguard \
-            luci-app-adblock adblock luci-app-statistics collectd curl ca-bundle"
+            luci-app-adblock adblock luci-app-statistics collectd curl ca-bundle \
+            axonhub luci-app-axonhub"
           MISS=""
           for p in $CORE; do
             grep -q "^CONFIG_PACKAGE_${p}=y$" .config || MISS="$MISS $p"
@@ -343,7 +355,7 @@ jobs:
             sing-box-tiny naiveproxy geoview microsocks tcping ipt2socks \
             banip luci-app-banip luci-app-upnp miniupnpd luci-app-ttyd \
             luci-app-samba4 luci-app-eqosplus luci-app-openlist luci-app-firewall \
-            ddns-scripts-services; do
+            ddns-scripts-services zoneinfo-core zoneinfo-asia; do
             grep -q "^CONFIG_PACKAGE_${p}=y$" .config || echo "::warning::Dropped or unknown package: $p"
           done
 
