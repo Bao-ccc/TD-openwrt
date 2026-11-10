@@ -176,12 +176,20 @@ jobs:
 
       # TD is PREPENDED (not appended): scripts/feeds uses the first
       # feed that provides a package, so TD versions win over base
-      # feed duplicates (mosdns and friends). The ";branch" suffix
-      # is standard feeds syntax for pinning a ref.
+      # feed duplicates (mosdns and friends). The ref suffix pins the
+      # feed: ";<branch-or-tag>" for a branch/tag, "^<sha>" for a full
+      # 40-char commit SHA (feeds' init_commit path: shallow clone +
+      # fetch that SHA + checkout). A SHA passed with ";" would fail
+      # (git clone --branch rejects SHAs), so detect it here.
       - name: Add TD feed
         run: |
           cd openwrt
-          sed -i "1i src-git TD https://github.com/Bao-ccc/TD-openwrt.git;${TD_REF}" feeds.conf.default
+          if printf '%s' "$TD_REF" | grep -qE '^[0-9a-f]{40}$'; then
+            SUFFIX="^${TD_REF}"
+          else
+            SUFFIX=";${TD_REF}"
+          fi
+          sed -i "1i src-git TD https://github.com/Bao-ccc/TD-openwrt.git${SUFFIX}" feeds.conf.default
           head -5 feeds.conf.default
           # Alternative if the ";ref" syntax ever proves problematic:
           # use the workflow's own checkout as a local feed instead:
