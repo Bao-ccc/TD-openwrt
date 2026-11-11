@@ -1,0 +1,6 @@
+# Set LuCI default language to Simplified Chinese on first boot.
+# uci-defaults scripts are sourced once at first boot, then removed,
+# so a later manual language change is not overridden.
+uci set luci.main.lang='zh-cn'
+uci commit luci
+exit 0
