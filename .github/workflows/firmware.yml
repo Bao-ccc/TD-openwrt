@@ -321,16 +321,20 @@ jobs:
           CONFIG_PACKAGE_luci-app-axonhub=y
           CONFIG_PACKAGE_zoneinfo-core=y
           CONFIG_PACKAGE_zoneinfo-asia=y
-          # --- Chinese language packs (2026-11-11) ---
-          # LuCI ships English only unless these are selected: the VM
-          # test's Language dropdown only offered auto/English. Base
-          # + every app that has a zh translation gets its pack.
-          # luci feed apps use zh-cn; TD feed apps use zh_Hans for
-          # nikki/mosdns/axonhub (their po/ dirs), zh-cn for
-          # passwall/eqosplus (both variants exist there, take both).
-          # Default language is set to zh-cn by files/etc/uci-defaults
-          # 99-luci-lang-zh-cn on first boot (auto would also work,
-          # this makes first boot Chinese regardless of browser).
+          # --- Chinese language packs (2026-11-11, fixed 2026-11-11) ---
+          # LuCI ships English only unless these are selected. The
+          # translation packages are auto-selected through their
+          # DEFAULT (LUCI_LANG_zh_Hans): setting the language option
+          # below is the master switch. Explicit CONFIG_PACKAGE
+          # lines ALONE do not work — build #11 proved it: all 19
+          # were silently dropped by defconfig (0 .lmo files in the
+          # image) because the language option was not set. A local
+          # defconfig repro confirmed: fragment-only = 0 selected,
+          # fragment + LUCI_LANG_zh_Hans = 18 zh-cn packs selected.
+          # NOTE: TD feed apps use zh-cn package names (their po/
+          # dirs are zh_Hans, but luci.mk aliases zh_Hans to zh-cn),
+          # so there are NO *-zh_Hans package symbols at all.
+          CONFIG_LUCI_LANG_zh_Hans=y
           CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
           CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
           CONFIG_PACKAGE_luci-i18n-adblock-zh-cn=y
@@ -344,12 +348,11 @@ jobs:
           CONFIG_PACKAGE_luci-i18n-ttyd-zh-cn=y
           CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y
           CONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y
-          CONFIG_PACKAGE_luci-i18n-passwall-zh_Hans=y
-          CONFIG_PACKAGE_luci-i18n-nikki-zh_Hans=y
-          CONFIG_PACKAGE_luci-i18n-mosdns-zh_Hans=y
-          CONFIG_PACKAGE_luci-i18n-axonhub-zh_Hans=y
+          CONFIG_PACKAGE_luci-i18n-nikki-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-mosdns-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-axonhub-zh-cn=y
           CONFIG_PACKAGE_luci-i18n-eqosplus-zh-cn=y
-          CONFIG_PACKAGE_luci-i18n-eqosplus-zh_Hans=y
+          CONFIG_PACKAGE_luci-i18n-argon-config-zh-cn=y
           # --- Other current services (best-effort names; defconfig
           # drops any that do not exist in the enabled feeds and the
           # verification step reports them as warnings, not failures.
@@ -390,6 +393,10 @@ jobs:
             grep -q "^CONFIG_PACKAGE_${p}=y$" .config || MISS="$MISS $p"
           done
           grep -q '^CONFIG_TARGET_x86_64_DEVICE_generic=y$' .config || MISS="$MISS TARGET_x86_64_DEVICE_generic"
+          # The Chinese language packs are auto-selected through this
+          # master switch (see the language-packs section above):
+          # if it is dropped, every i18n package is dropped with it.
+          grep -q '^CONFIG_LUCI_LANG_zh_Hans=y$' .config || MISS="$MISS LUCI_LANG_zh_Hans"
           if [ -n "$MISS" ]; then
             echo "::error::Missing after defconfig:$MISS"
             exit 1
@@ -409,9 +416,9 @@ jobs:
             luci-i18n-banip-zh-cn luci-i18n-ddns-zh-cn luci-i18n-openlist-zh-cn \
             luci-i18n-package-manager-zh-cn luci-i18n-samba4-zh-cn luci-i18n-sqm-zh-cn \
             luci-i18n-statistics-zh-cn luci-i18n-ttyd-zh-cn luci-i18n-upnp-zh-cn \
-            luci-i18n-passwall-zh-cn luci-i18n-passwall-zh_Hans \
-            luci-i18n-nikki-zh_Hans luci-i18n-mosdns-zh_Hans luci-i18n-axonhub-zh_Hans \
-            luci-i18n-eqosplus-zh-cn luci-i18n-eqosplus-zh_Hans; do
+            luci-i18n-passwall-zh-cn \
+            luci-i18n-nikki-zh-cn luci-i18n-mosdns-zh-cn luci-i18n-axonhub-zh-cn \
+            luci-i18n-eqosplus-zh-cn luci-i18n-argon-config-zh-cn; do
             grep -q "^CONFIG_PACKAGE_${p}=y$" .config || echo "::warning::Dropped or unknown package: $p"
           done
 
