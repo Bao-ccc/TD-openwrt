@@ -321,6 +321,35 @@ jobs:
           CONFIG_PACKAGE_luci-app-axonhub=y
           CONFIG_PACKAGE_zoneinfo-core=y
           CONFIG_PACKAGE_zoneinfo-asia=y
+          # --- Chinese language packs (2026-11-11) ---
+          # LuCI ships English only unless these are selected: the VM
+          # test's Language dropdown only offered auto/English. Base
+          # + every app that has a zh translation gets its pack.
+          # luci feed apps use zh-cn; TD feed apps use zh_Hans for
+          # nikki/mosdns/axonhub (their po/ dirs), zh-cn for
+          # passwall/eqosplus (both variants exist there, take both).
+          # Default language is set to zh-cn by files/etc/uci-defaults
+          # 99-luci-lang-zh-cn on first boot (auto would also work,
+          # this makes first boot Chinese regardless of browser).
+          CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-adblock-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-banip-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-ddns-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-openlist-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-package-manager-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-samba4-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-sqm-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-statistics-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-ttyd-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-passwall-zh_Hans=y
+          CONFIG_PACKAGE_luci-i18n-nikki-zh_Hans=y
+          CONFIG_PACKAGE_luci-i18n-mosdns-zh_Hans=y
+          CONFIG_PACKAGE_luci-i18n-axonhub-zh_Hans=y
+          CONFIG_PACKAGE_luci-i18n-eqosplus-zh-cn=y
+          CONFIG_PACKAGE_luci-i18n-eqosplus-zh_Hans=y
           # --- Other current services (best-effort names; defconfig
           # drops any that do not exist in the enabled feeds and the
           # verification step reports them as warnings, not failures.
@@ -375,7 +404,14 @@ jobs:
             sing-box-tiny naiveproxy geoview microsocks tcping ipt2socks \
             banip luci-app-banip luci-app-upnp miniupnpd luci-app-ttyd \
             luci-app-samba4 luci-app-eqosplus luci-app-openlist luci-app-firewall \
-            ddns-scripts-services zoneinfo-core zoneinfo-asia; do
+            ddns-scripts-services zoneinfo-core zoneinfo-asia \
+            luci-i18n-base-zh-cn luci-i18n-firewall-zh-cn luci-i18n-adblock-zh-cn \
+            luci-i18n-banip-zh-cn luci-i18n-ddns-zh-cn luci-i18n-openlist-zh-cn \
+            luci-i18n-package-manager-zh-cn luci-i18n-samba4-zh-cn luci-i18n-sqm-zh-cn \
+            luci-i18n-statistics-zh-cn luci-i18n-ttyd-zh-cn luci-i18n-upnp-zh-cn \
+            luci-i18n-passwall-zh-cn luci-i18n-passwall-zh_Hans \
+            luci-i18n-nikki-zh_Hans luci-i18n-mosdns-zh_Hans luci-i18n-axonhub-zh_Hans \
+            luci-i18n-eqosplus-zh-cn luci-i18n-eqosplus-zh_Hans; do
             grep -q "^CONFIG_PACKAGE_${p}=y$" .config || echo "::warning::Dropped or unknown package: $p"
           done
 
